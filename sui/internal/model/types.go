@@ -140,18 +140,6 @@ type CatalogEntry struct {
 	CoverBlobID string `json:"cover_blob_id,omitempty"`
 }
 
-// RegistryEntry represents a catalog in the registry
-type RegistryEntry struct {
-	// Catalog object ID
-	CatalogID string `json:"catalog_id"`
-	// Catalog name
-	Name string `json:"name"`
-	// Description
-	Description string `json:"description"`
-	// Primary platform focus (255 = mixed)
-	PrimaryPlatform Platform `json:"primary_platform"`
-}
-
 // PublishResult contains the result of a publish operation
 type PublishResult struct {
 	// Catalog ID
@@ -171,4 +159,3 @@ type PublishResult struct {
 	// Title
 	Title string `json:"title"`
 }
-

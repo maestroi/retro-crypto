@@ -2,76 +2,63 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/spf13/viper"
 )
 
 // Config holds all configuration values
 type Config struct {
 	// Sui RPC endpoint
-	SuiRPCURL string `mapstructure:"SUI_RPC_URL"`
+	SuiRPCURL string
 	// Sui network (testnet, devnet, mainnet)
-	SuiNetwork string `mapstructure:"SUI_NETWORK"`
+	SuiNetwork string
 	// Walrus network (testnet, devnet, mainnet)
-	WalrusNetwork string `mapstructure:"WALRUS_NETWORK"`
+	WalrusNetwork string
 	// Walrus aggregator URL for reading blobs
-	WalrusAggregatorURL string `mapstructure:"WALRUS_AGGREGATOR_URL"`
+	WalrusAggregatorURL string
 	// Walrus publisher URL for uploading blobs
-	WalrusPublisherURL string `mapstructure:"WALRUS_PUBLISHER_URL"`
+	WalrusPublisherURL string
 	// Private key (hex encoded, without 0x prefix)
-	PrivateKey string `mapstructure:"SUI_PRIVATE_KEY"`
+	PrivateKey string
 	// Mnemonic phrase (alternative to private key)
-	Mnemonic string `mapstructure:"SUI_MNEMONIC"`
+	Mnemonic string
 	// Package ID of the deployed cartridge_storage module
-	PackageID string `mapstructure:"PACKAGE_ID"`
+	PackageID string
 	// Optional: Registry object ID for catalog discovery
-	RegistryID string `mapstructure:"REGISTRY_ID"`
+	RegistryID string
 }
 
 // Default configuration values
 const (
-	DefaultSuiNetwork          = "testnet"
-	DefaultWalrusNetwork       = "testnet"
-	DefaultSuiRPCTestnet       = "https://fullnode.testnet.sui.io:443"
-	DefaultSuiRPCDevnet        = "https://fullnode.devnet.sui.io:443"
-	DefaultSuiRPCMainnet       = "https://fullnode.mainnet.sui.io:443"
-	DefaultWalrusAggregator    = "https://aggregator.walrus-testnet.walrus.space"
-	DefaultWalrusPublisher     = "https://publisher.walrus-testnet.walrus.space"
+	DefaultSuiNetwork       = "testnet"
+	DefaultWalrusNetwork    = "testnet"
+	DefaultSuiRPCTestnet    = "https://fullnode.testnet.sui.io:443"
+	DefaultSuiRPCDevnet     = "https://fullnode.devnet.sui.io:443"
+	DefaultSuiRPCMainnet    = "https://fullnode.mainnet.sui.io:443"
+	DefaultWalrusAggregator = "https://aggregator.walrus-testnet.walrus.space"
+	DefaultWalrusPublisher  = "https://publisher.walrus-testnet.walrus.space"
 )
 
 // Load reads configuration from environment and .env file
 func Load() (*Config, error) {
-	v := viper.New()
+	// Try to load .env file
+	loadEnvFile(".env")
 
-	// Set defaults
-	v.SetDefault("SUI_NETWORK", DefaultSuiNetwork)
-	v.SetDefault("WALRUS_NETWORK", DefaultWalrusNetwork)
-	v.SetDefault("WALRUS_AGGREGATOR_URL", DefaultWalrusAggregator)
-	v.SetDefault("WALRUS_PUBLISHER_URL", DefaultWalrusPublisher)
-
-	// Read from .env file if present
-	v.SetConfigFile(".env")
-	v.SetConfigType("env")
-	if err := v.ReadInConfig(); err != nil {
-		// It's okay if .env doesn't exist
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Only log, don't fail - environment variables may be set
-		}
-	}
-
-	// Read from environment variables
-	v.AutomaticEnv()
-
-	// Create config
-	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	cfg := &Config{
+		SuiNetwork:          getEnv("SUI_NETWORK", DefaultSuiNetwork),
+		WalrusNetwork:       getEnv("WALRUS_NETWORK", DefaultWalrusNetwork),
+		WalrusAggregatorURL: getEnv("WALRUS_AGGREGATOR_URL", DefaultWalrusAggregator),
+		WalrusPublisherURL:  getEnv("WALRUS_PUBLISHER_URL", DefaultWalrusPublisher),
+		PrivateKey:          getEnv("SUI_PRIVATE_KEY", ""),
+		Mnemonic:            getEnv("SUI_MNEMONIC", ""),
+		PackageID:           getEnv("PACKAGE_ID", ""),
+		RegistryID:          getEnv("REGISTRY_ID", ""),
 	}
 
 	// Set RPC URL based on network if not explicitly set
+	cfg.SuiRPCURL = getEnv("SUI_RPC_URL", "")
 	if cfg.SuiRPCURL == "" {
 		switch strings.ToLower(cfg.SuiNetwork) {
 		case "testnet":
@@ -86,6 +73,41 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadEnvFile loads environment variables from a .env file
+func loadEnvFile(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return // File doesn't exist, that's OK
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			// Remove quotes if present
+			value = strings.Trim(value, `"'`)
+			if os.Getenv(key) == "" {
+				os.Setenv(key, value)
+			}
+		}
+	}
+}
+
+// getEnv returns environment variable or default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 // Validate checks that required configuration is present
@@ -112,12 +134,3 @@ func (c *Config) ValidateForPublish() error {
 	}
 	return nil
 }
-
-// GetEnvOrDefault returns environment variable or default value
-func GetEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-

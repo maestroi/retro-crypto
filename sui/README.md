@@ -34,19 +34,11 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch test
    ```
    Or visit: https://faucet.testnet.sui.io/
 
-### 3. Get Testnet WAL Tokens (for Walrus)
-
-Walrus testnet uses WAL tokens for storage payments. Visit:
-- https://walrus.site/faucet (Walrus faucet)
-
-### 4. Install Go 1.22+
+### 3. Build catalogctl
 
 ```bash
-# macOS
-brew install go
-
-# Verify
-go version
+cd sui
+go build -o catalogctl ./cmd/catalogctl
 ```
 
 ## Quick Start
@@ -73,10 +65,6 @@ Create a `.env` file in the `sui/` directory:
 SUI_NETWORK=testnet
 SUI_RPC_URL=https://fullnode.testnet.sui.io:443
 
-# Your private key (export from sui client)
-# Run: sui keytool export --key-identity <ADDRESS>
-SUI_PRIVATE_KEY=your_hex_private_key_here
-
 # Package ID from deployment
 PACKAGE_ID=0x1234...abcd
 
@@ -85,112 +73,105 @@ WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
 WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
 ```
 
-### 3. Build CLI
+### 3. Create a Catalog
 
+Generate the sui command:
 ```bash
-cd sui
-go build -o catalogctl ./cmd/catalogctl
+./catalogctl gen-create-catalog --name "Top 25 NES Games" --description "Classic NES titles"
 ```
 
-### 4. Create a Catalog
+Then run the generated `sui client call` command:
+```bash
+sui client call \
+  --package 0xYOUR_PACKAGE_ID \
+  --module catalog \
+  --function create_catalog \
+  --args "Top 25 NES Games" "Classic NES titles" \
+  --gas-budget 10000000
+```
+
+Note the **Catalog Object ID** from the output.
+
+### 4. Upload Game to Walrus
 
 ```bash
-./catalogctl init-catalog --name "Top 25 NES Games" --description "Classic NES titles"
+./catalogctl upload-blob --file ./games/mario.zip
 
 # Output:
-# ✓ Catalog created successfully!
+# ✓ Upload successful!
 # {
-#   "catalog_id": "0xabc123...",
-#   "tx_digest": "..."
+#   "blob_id": "abc123...",
+#   "sha256": "def456...",
+#   "size_bytes": 12345
 # }
 ```
 
-### 5. Publish a Game
+### 5. Create Cartridge on Sui
 
-Prepare a ZIP file containing:
-- `run.json` - Game metadata
-- ROM/game files
+Use the `sui client call` command printed by `upload-blob`, or:
 
-Example `run.json`:
-```json
-{
-  "platform": "NES",
-  "title": "Super Mario Bros",
-  "executable": "smb.nes",
-  "year": "1985",
-  "publisher": "Nintendo"
-}
+```bash
+sui client call \
+  --package 0xYOUR_PACKAGE_ID \
+  --module cartridge \
+  --function create_cartridge \
+  --args \
+    "mario-bros" \
+    "Super Mario Bros" \
+    3 \
+    "jsnes" \
+    1 \
+    0xBLOB_ID_FROM_WALRUS \
+    0xSHA256_HASH \
+    12345 \
+    1704000000000 \
+  --gas-budget 10000000
 ```
 
-Publish:
+Platform codes:
+- `0` = DOS
+- `1` = GB
+- `2` = GBC
+- `3` = NES
+- `4` = SNES
+
+### 6. Add to Catalog
+
+Generate the command:
 ```bash
-./catalogctl publish-game \
-  --catalog 0xabc123... \
-  --slug "super-mario-bros" \
+./catalogctl gen-add-entry \
+  --catalog 0xCATALOG_ID \
+  --slug "mario-bros" \
+  --cartridge 0xCARTRIDGE_ID \
   --title "Super Mario Bros" \
   --platform nes \
-  --zip ./games/smb.zip \
-  --version 1
-
-# Output shows:
-# - Blob ID (Walrus)
-# - Cartridge ID (Sui)
-# - Transaction digest
+  --size 12345
 ```
 
-### 6. List Catalog Contents
+Then run the generated `sui client call` command.
+
+### 7. List Catalog Contents
 
 ```bash
-./catalogctl list-catalog --catalog 0xabc123...
+./catalogctl list-catalog --catalog 0xCATALOG_ID
 
 # Output:
+# Catalog: Top 25 NES Games
+# Description: Classic NES titles
+# Entries: 1
+#
 # SLUG                 TITLE                          PLATFORM VERSION   CARTRIDGE_ID
-# ------------------------------------------------------------------------------------
-# super-mario-bros     Super Mario Bros               NES      v1        0xdef456...
+# ----------------------------------------------------------------------------------------
+# mario-bros           Super Mario Bros               NES      v1        0xdef456...
 ```
-
-## Configure Frontend
-
-Add environment variables to your `.env` file in `/web`:
-
-```env
-# Sui RPC endpoint
-VITE_SUI_RPC_URL=https://fullnode.testnet.sui.io:443
-
-# Walrus aggregator for downloads
-VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
-
-# Your deployed package ID
-VITE_SUI_PACKAGE_ID=0x1234...
-
-# Your catalog ID
-VITE_SUI_CATALOG_ID=0xabc123...
-```
-
-Then select "Sui + Walrus" in the protocol dropdown.
 
 ## CLI Reference
 
-### init-catalog
-Create a new catalog.
+### upload-blob
+Upload a file to Walrus.
 
 ```bash
-catalogctl init-catalog --name "NAME" [--description "DESC"]
-```
-
-### publish-game
-Upload game to Walrus and register in catalog.
-
-```bash
-catalogctl publish-game \
-  --catalog CATALOG_ID \
-  --slug SLUG \
-  --title "TITLE" \
-  --platform [dos|gb|gbc|nes|snes] \
-  --zip PATH \
-  [--emulator CORE] \
-  [--version N] \
-  [--epochs N]
+catalogctl upload-blob --file PATH [--epochs N]
 ```
 
 ### list-catalog
@@ -207,19 +188,51 @@ Get detailed cartridge info.
 catalogctl get-cartridge --id CARTRIDGE_ID
 ```
 
-### set-entry
-Update a catalog entry to point to new version.
+### download-blob
+Download a blob from Walrus.
 
 ```bash
-catalogctl set-entry --catalog CATALOG_ID --slug SLUG --cartridge NEW_CARTRIDGE_ID
+catalogctl download-blob --blob-id BLOB_ID --output FILE
 ```
 
-### remove-entry
-Remove a game from catalog.
+### gen-create-catalog
+Generate sui CLI command for creating a catalog.
 
 ```bash
-catalogctl remove-entry --catalog CATALOG_ID --slug SLUG
+catalogctl gen-create-catalog --name "NAME" [--description "DESC"]
 ```
+
+### gen-add-entry
+Generate sui CLI command for adding a catalog entry.
+
+```bash
+catalogctl gen-add-entry \
+  --catalog CATALOG_ID \
+  --slug SLUG \
+  --cartridge CARTRIDGE_ID \
+  --title "TITLE" \
+  --platform [dos|gb|gbc|nes|snes] \
+  --size BYTES \
+  [--emulator CORE] \
+  [--version N]
+```
+
+## Configure Frontend
+
+Add environment variables to your `.env` file in `/web`:
+
+```env
+# Sui RPC endpoint
+VITE_SUI_RPC_URL=https://fullnode.testnet.sui.io:443
+
+# Walrus aggregator for downloads
+VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
+
+# Your catalog ID
+VITE_SUI_CATALOG_ID=0xabc123...
+```
+
+Then select "Sui + Walrus" in the protocol dropdown.
 
 ## Architecture
 
@@ -240,15 +253,22 @@ catalogctl remove-entry --catalog CATALOG_ID --slug SLUG
 │  - Cartridge metadata   │    │  - One blob per game    │
 │  - Dynamic fields       │    │  - Content-addressed    │
 └─────────────────────────┘    └─────────────────────────┘
-                 ▲
+                 ▲                        ▲
+                 │                        │
+┌────────────────┴────────────────────────┴───────────────────────┐
+│                       catalogctl CLI                             │
+│  - upload-blob: Upload ZIPs to Walrus                           │
+│  - list-catalog: Read catalog entries                           │
+│  - get-cartridge: Read cartridge info                           │
+│  - gen-*: Generate sui client call commands                     │
+└─────────────────────────────────────────────────────────────────┘
                  │
+                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Go CLI (catalogctl)                        │
-│  /sui/cmd/catalogctl                                             │
-│  - Creates catalogs                                              │
-│  - Uploads to Walrus                                             │
-│  - Creates cartridge objects                                     │
-│  - Manages catalog entries                                       │
+│                       sui client CLI                             │
+│  - Creates catalogs (on-chain)                                   │
+│  - Creates cartridges (on-chain)                                 │
+│  - Adds catalog entries (on-chain)                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -306,6 +326,51 @@ struct Cartridge has key, store {
 | 3    | NES      | jsnes         |
 | 4    | SNES     | snes9x        |
 
+## End-to-End Example
+
+```bash
+# 1. Deploy contracts (one time)
+cd sui/contracts
+sui client publish --gas-budget 100000000
+# Note: PACKAGE_ID = 0x...
+
+# 2. Set up environment
+cd sui
+echo "PACKAGE_ID=0x..." >> .env
+
+# 3. Create catalog
+./catalogctl gen-create-catalog --name "My NES Games"
+# Run the outputted sui client call command
+# Note: CATALOG_ID = 0x...
+
+# 4. Prepare game ZIP with run.json
+mkdir game && cd game
+echo '{"platform":"NES","title":"Mario","rom":"mario.nes"}' > run.json
+cp /path/to/mario.nes .
+zip -r ../mario.zip *
+cd ..
+
+# 5. Upload to Walrus
+./catalogctl upload-blob --file mario.zip
+# Note: BLOB_ID and SHA256
+
+# 6. Create cartridge (run the sui command from upload output)
+# Note: CARTRIDGE_ID = 0x...
+
+# 7. Add to catalog
+./catalogctl gen-add-entry \
+  --catalog $CATALOG_ID \
+  --slug mario \
+  --cartridge $CARTRIDGE_ID \
+  --title "Super Mario Bros" \
+  --platform nes \
+  --size 12345
+# Run the outputted sui client call command
+
+# 8. Verify
+./catalogctl list-catalog --catalog $CATALOG_ID
+```
+
 ## Troubleshooting
 
 ### "No gas coins available"
@@ -315,9 +380,9 @@ sui client faucet
 ```
 
 ### "Walrus upload failed"
-1. Check you have WAL tokens
-2. Verify publisher URL is correct
-3. Try a smaller file first
+1. Check Walrus publisher URL is correct
+2. Try a smaller file first
+3. Ensure you have WAL tokens (visit walrus.site/faucet)
 
 ### "Catalog not found"
 Verify the catalog ID exists:
@@ -357,4 +422,3 @@ GOOS=windows GOARCH=amd64 go build -o catalogctl.exe ./cmd/catalogctl
 ## License
 
 MIT
-

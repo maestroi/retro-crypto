@@ -1,636 +1,241 @@
-// Package sui provides a client for interacting with Sui blockchain
+// Package sui provides a client for interacting with Sui blockchain via JSON-RPC
 package sui
 
 import (
-	"context"
-	"encoding/hex"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"strings"
-
-	"github.com/coming-chat/go-sui/v2/account"
-	"github.com/coming-chat/go-sui/v2/client"
-	"github.com/coming-chat/go-sui/v2/lib"
-	"github.com/coming-chat/go-sui/v2/move_types"
-	"github.com/coming-chat/go-sui/v2/sui_types"
-	"github.com/coming-chat/go-sui/v2/types"
-	"github.com/retro-crypto/sui/internal/model"
+	"io"
+	"net/http"
+	"time"
 )
 
-// Client is a Sui blockchain client
+// Client is a Sui blockchain JSON-RPC client
 type Client struct {
-	rpcURL    string
-	client    *client.Client
-	account   *account.Account
-	packageID string
+	rpcURL     string
+	httpClient *http.Client
+	requestID  int
+}
+
+// RPCRequest represents a JSON-RPC request
+type RPCRequest struct {
+	JSONRPC string        `json:"jsonrpc"`
+	ID      int           `json:"id"`
+	Method  string        `json:"method"`
+	Params  []interface{} `json:"params"`
+}
+
+// RPCResponse represents a JSON-RPC response
+type RPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      int             `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *RPCError       `json:"error,omitempty"`
+}
+
+// RPCError represents a JSON-RPC error
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// ObjectResponse represents sui_getObject response
+type ObjectResponse struct {
+	Data *ObjectData `json:"data"`
+}
+
+// ObjectData represents object data
+type ObjectData struct {
+	ObjectID string                 `json:"objectId"`
+	Version  string                 `json:"version"`
+	Digest   string                 `json:"digest"`
+	Type     string                 `json:"type"`
+	Owner    interface{}            `json:"owner"`
+	Content  map[string]interface{} `json:"content"`
+}
+
+// DynamicFieldsResponse represents dynamic fields response
+type DynamicFieldsResponse struct {
+	Data       []DynamicFieldInfo `json:"data"`
+	NextCursor *string            `json:"nextCursor"`
+	HasNextPage bool              `json:"hasNextPage"`
+}
+
+// DynamicFieldInfo represents a dynamic field entry
+type DynamicFieldInfo struct {
+	Name         DynamicFieldName `json:"name"`
+	BCSName      string           `json:"bcsName"`
+	Type         string           `json:"type"`
+	ObjectType   string           `json:"objectType"`
+	ObjectID     string           `json:"objectId"`
+	Version      int              `json:"version"`
+	Digest       string           `json:"digest"`
+}
+
+// DynamicFieldName represents the name of a dynamic field
+type DynamicFieldName struct {
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
 }
 
 // NewClient creates a new Sui client
-func NewClient(rpcURL, packageID string) (*Client, error) {
-	c, err := client.Dial(rpcURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Sui RPC: %w", err)
-	}
-
+func NewClient(rpcURL string) *Client {
 	return &Client{
-		rpcURL:    rpcURL,
-		client:    c,
-		packageID: packageID,
-	}, nil
-}
-
-// SetAccountFromPrivateKey sets the account from a hex-encoded private key
-func (c *Client) SetAccountFromPrivateKey(privateKeyHex string) error {
-	// Remove 0x prefix if present
-	privateKeyHex = strings.TrimPrefix(privateKeyHex, "0x")
-	
-	acc, err := account.NewAccountWithKeystore(privateKeyHex)
-	if err != nil {
-		return fmt.Errorf("failed to create account from private key: %w", err)
-	}
-	c.account = acc
-	return nil
-}
-
-// SetAccountFromMnemonic sets the account from a mnemonic phrase
-func (c *Client) SetAccountFromMnemonic(mnemonic string) error {
-	acc, err := account.NewAccountWithMnemonic(mnemonic)
-	if err != nil {
-		return fmt.Errorf("failed to create account from mnemonic: %w", err)
-	}
-	c.account = acc
-	return nil
-}
-
-// GetAddress returns the account address
-func (c *Client) GetAddress() string {
-	if c.account == nil {
-		return ""
-	}
-	return c.account.Address
-}
-
-// CreateCatalog creates a new catalog on Sui
-func (c *Client) CreateCatalog(ctx context.Context, name, description string) (string, string, error) {
-	if c.account == nil {
-		return "", "", fmt.Errorf("account not set")
-	}
-
-	packageID, err := sui_types.NewAddressFromHex(c.packageID)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid package ID: %w", err)
-	}
-
-	// Build transaction
-	ptb := sui_types.NewProgrammableTransactionBuilder()
-	
-	// Add arguments
-	nameArg := ptb.MustPure(name)
-	descArg := ptb.MustPure(description)
-
-	// Call create_catalog
-	ptb.MoveCall(
-		*packageID,
-		move_types.Identifier("catalog"),
-		move_types.Identifier("create_catalog"),
-		[]move_types.TypeTag{},
-		[]sui_types.Argument{nameArg, descArg},
-	)
-
-	pt := ptb.Finish()
-
-	// Get gas coin
-	sender, err := sui_types.NewAddressFromHex(c.account.Address)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid sender address: %w", err)
-	}
-
-	coins, err := c.client.GetCoins(ctx, *sender, nil, nil, 10)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get coins: %w", err)
-	}
-	if len(coins.Data) == 0 {
-		return "", "", fmt.Errorf("no gas coins available")
-	}
-
-	gasCoin := coins.Data[0]
-	gasPayment := []sui_types.ObjectRef{{
-		ObjectId: gasCoin.CoinObjectId,
-		Version:  gasCoin.Version,
-		Digest:   gasCoin.Digest,
-	}}
-
-	// Build transaction data
-	txData := sui_types.NewProgrammable(
-		*sender,
-		gasPayment,
-		pt,
-		50000000, // gas budget
-		1000,     // gas price
-	)
-
-	// Sign transaction
-	signature, err := c.account.SignSecureWithoutEncode(txData, sui_types.DefaultIntent())
-	if err != nil {
-		return "", "", fmt.Errorf("failed to sign transaction: %w", err)
-	}
-
-	// Execute transaction
-	resp, err := c.client.ExecuteTransactionBlock(
-		ctx,
-		lib.Base64Data(txData.Marshal()),
-		[]any{signature},
-		&types.SuiTransactionBlockResponseOptions{
-			ShowEffects:       true,
-			ShowObjectChanges: true,
-			ShowEvents:        true,
+		rpcURL: rpcURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
 		},
-		types.TxnRequestTypeWaitForLocalExecution,
-	)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to execute transaction: %w", err)
+		requestID: 1,
 	}
-
-	// Extract catalog ID from object changes
-	var catalogID string
-	if resp.ObjectChanges != nil {
-		for _, change := range resp.ObjectChanges {
-			if created, ok := change.(types.ObjectChangeCreated); ok {
-				if strings.Contains(string(created.ObjectType), "Catalog") {
-					catalogID = created.ObjectId.String()
-					break
-				}
-			}
-		}
-	}
-
-	if catalogID == "" {
-		return "", "", fmt.Errorf("catalog ID not found in transaction response")
-	}
-
-	return catalogID, resp.Digest.String(), nil
 }
 
-// CreateCartridge creates a new cartridge object on Sui
-func (c *Client) CreateCartridge(ctx context.Context, cart *model.Cartridge) (string, string, error) {
-	if c.account == nil {
-		return "", "", fmt.Errorf("account not set")
+// call makes a JSON-RPC call
+func (c *Client) call(method string, params []interface{}) (json.RawMessage, error) {
+	c.requestID++
+
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		ID:      c.requestID,
+		Method:  method,
+		Params:  params,
 	}
 
-	packageID, err := sui_types.NewAddressFromHex(c.packageID)
+	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid package ID: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	blobIDBytes, err := hex.DecodeString(cart.BlobID)
+	httpReq, err := http.NewRequest("POST", c.rpcURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return "", "", fmt.Errorf("invalid blob ID: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	sha256Bytes, err := hex.DecodeString(cart.SHA256)
+	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid SHA256: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
+	defer resp.Body.Close()
 
-	// Build transaction
-	ptb := sui_types.NewProgrammableTransactionBuilder()
-	
-	// Add arguments
-	slugArg := ptb.MustPure(cart.Slug)
-	titleArg := ptb.MustPure(cart.Title)
-	platformArg := ptb.MustPure(uint8(cart.Platform))
-	emulatorArg := ptb.MustPure(cart.EmulatorCore)
-	versionArg := ptb.MustPure(cart.Version)
-	blobIDArg := ptb.MustPure(blobIDBytes)
-	sha256Arg := ptb.MustPure(sha256Bytes)
-	sizeArg := ptb.MustPure(cart.SizeBytes)
-	createdAtArg := ptb.MustPure(uint64(cart.CreatedAt.UnixMilli()))
-
-	// Call create_cartridge
-	ptb.MoveCall(
-		*packageID,
-		move_types.Identifier("cartridge"),
-		move_types.Identifier("create_cartridge"),
-		[]move_types.TypeTag{},
-		[]sui_types.Argument{
-			slugArg, titleArg, platformArg, emulatorArg,
-			versionArg, blobIDArg, sha256Arg, sizeArg, createdAtArg,
-		},
-	)
-
-	pt := ptb.Finish()
-
-	// Get gas coin
-	sender, err := sui_types.NewAddressFromHex(c.account.Address)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid sender address: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	coins, err := c.client.GetCoins(ctx, *sender, nil, nil, 10)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get coins: %w", err)
-	}
-	if len(coins.Data) == 0 {
-		return "", "", fmt.Errorf("no gas coins available")
+	var rpcResp RPCResponse
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	gasCoin := coins.Data[0]
-	gasPayment := []sui_types.ObjectRef{{
-		ObjectId: gasCoin.CoinObjectId,
-		Version:  gasCoin.Version,
-		Digest:   gasCoin.Digest,
-	}}
-
-	// Build transaction data
-	txData := sui_types.NewProgrammable(
-		*sender,
-		gasPayment,
-		pt,
-		50000000, // gas budget
-		1000,     // gas price
-	)
-
-	// Sign transaction
-	signature, err := c.account.SignSecureWithoutEncode(txData, sui_types.DefaultIntent())
-	if err != nil {
-		return "", "", fmt.Errorf("failed to sign transaction: %w", err)
+	if rpcResp.Error != nil {
+		return nil, fmt.Errorf("RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
 	}
 
-	// Execute transaction
-	resp, err := c.client.ExecuteTransactionBlock(
-		ctx,
-		lib.Base64Data(txData.Marshal()),
-		[]any{signature},
-		&types.SuiTransactionBlockResponseOptions{
-			ShowEffects:       true,
-			ShowObjectChanges: true,
-		},
-		types.TxnRequestTypeWaitForLocalExecution,
-	)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to execute transaction: %w", err)
-	}
-
-	// Extract cartridge ID from object changes
-	var cartridgeID string
-	if resp.ObjectChanges != nil {
-		for _, change := range resp.ObjectChanges {
-			if created, ok := change.(types.ObjectChangeCreated); ok {
-				if strings.Contains(string(created.ObjectType), "Cartridge") {
-					cartridgeID = created.ObjectId.String()
-					break
-				}
-			}
-		}
-	}
-
-	if cartridgeID == "" {
-		return "", "", fmt.Errorf("cartridge ID not found in transaction response")
-	}
-
-	return cartridgeID, resp.Digest.String(), nil
+	return rpcResp.Result, nil
 }
 
-// AddCatalogEntry adds an entry to a catalog
-func (c *Client) AddCatalogEntry(ctx context.Context, catalogID string, entry *model.CatalogEntry) (string, error) {
-	if c.account == nil {
-		return "", fmt.Errorf("account not set")
+// GetObject fetches an object by ID
+func (c *Client) GetObject(objectID string) (*ObjectResponse, error) {
+	options := map[string]bool{
+		"showContent": true,
+		"showOwner":   true,
+		"showType":    true,
 	}
 
-	packageID, err := sui_types.NewAddressFromHex(c.packageID)
+	result, err := c.call("sui_getObject", []interface{}{objectID, options})
 	if err != nil {
-		return "", fmt.Errorf("invalid package ID: %w", err)
+		return nil, err
 	}
 
-	catalogObjID, err := sui_types.NewObjectIdFromHex(catalogID)
-	if err != nil {
-		return "", fmt.Errorf("invalid catalog ID: %w", err)
+	var resp ObjectResponse
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal object: %w", err)
 	}
 
-	cartridgeObjID, err := sui_types.NewObjectIdFromHex(entry.CartridgeID)
-	if err != nil {
-		return "", fmt.Errorf("invalid cartridge ID: %w", err)
-	}
-
-	coverBlobBytes := []byte{}
-	if entry.CoverBlobID != "" {
-		coverBlobBytes, _ = hex.DecodeString(entry.CoverBlobID)
-	}
-
-	// Get catalog object reference
-	catalogObj, err := c.client.GetObject(ctx, *catalogObjID, &types.SuiObjectDataOptions{
-		ShowContent: true,
-		ShowOwner:   true,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to get catalog object: %w", err)
-	}
-
-	// Build transaction
-	ptb := sui_types.NewProgrammableTransactionBuilder()
-	
-	// Add catalog as mutable object input
-	catalogInput := ptb.MustObj(sui_types.ObjectArg{
-		SharedObject: &sui_types.SharedObjectArg{
-			Id:                   *catalogObjID,
-			InitialSharedVersion: catalogObj.Data.Version,
-			Mutable:              true,
-		},
-	})
-
-	// Add other arguments
-	slugArg := ptb.MustPure(entry.Slug)
-	cartridgeIDArg := ptb.MustPure(*cartridgeObjID)
-	titleArg := ptb.MustPure(entry.Title)
-	platformArg := ptb.MustPure(uint8(entry.Platform))
-	sizeArg := ptb.MustPure(entry.SizeBytes)
-	emulatorArg := ptb.MustPure(entry.EmulatorCore)
-	versionArg := ptb.MustPure(entry.Version)
-	coverArg := ptb.MustPure(coverBlobBytes)
-
-	// Call add_entry
-	ptb.MoveCall(
-		*packageID,
-		move_types.Identifier("catalog"),
-		move_types.Identifier("add_entry"),
-		[]move_types.TypeTag{},
-		[]sui_types.Argument{
-			catalogInput, slugArg, cartridgeIDArg, titleArg,
-			platformArg, sizeArg, emulatorArg, versionArg, coverArg,
-		},
-	)
-
-	pt := ptb.Finish()
-
-	// Get gas coin
-	sender, err := sui_types.NewAddressFromHex(c.account.Address)
-	if err != nil {
-		return "", fmt.Errorf("invalid sender address: %w", err)
-	}
-
-	coins, err := c.client.GetCoins(ctx, *sender, nil, nil, 10)
-	if err != nil {
-		return "", fmt.Errorf("failed to get coins: %w", err)
-	}
-	if len(coins.Data) == 0 {
-		return "", fmt.Errorf("no gas coins available")
-	}
-
-	gasCoin := coins.Data[0]
-	gasPayment := []sui_types.ObjectRef{{
-		ObjectId: gasCoin.CoinObjectId,
-		Version:  gasCoin.Version,
-		Digest:   gasCoin.Digest,
-	}}
-
-	// Build transaction data
-	txData := sui_types.NewProgrammable(
-		*sender,
-		gasPayment,
-		pt,
-		50000000, // gas budget
-		1000,     // gas price
-	)
-
-	// Sign transaction
-	signature, err := c.account.SignSecureWithoutEncode(txData, sui_types.DefaultIntent())
-	if err != nil {
-		return "", fmt.Errorf("failed to sign transaction: %w", err)
-	}
-
-	// Execute transaction
-	resp, err := c.client.ExecuteTransactionBlock(
-		ctx,
-		lib.Base64Data(txData.Marshal()),
-		[]any{signature},
-		&types.SuiTransactionBlockResponseOptions{
-			ShowEffects: true,
-		},
-		types.TxnRequestTypeWaitForLocalExecution,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute transaction: %w", err)
-	}
-
-	return resp.Digest.String(), nil
+	return &resp, nil
 }
 
-// GetCatalog retrieves a catalog object
-func (c *Client) GetCatalog(ctx context.Context, catalogID string) (*model.Catalog, error) {
-	objID, err := sui_types.NewObjectIdFromHex(catalogID)
+// GetDynamicFields fetches dynamic fields of an object
+func (c *Client) GetDynamicFields(objectID string, cursor *string, limit int) (*DynamicFieldsResponse, error) {
+	params := []interface{}{objectID, cursor, limit}
+
+	result, err := c.call("suix_getDynamicFields", params)
 	if err != nil {
-		return nil, fmt.Errorf("invalid catalog ID: %w", err)
+		return nil, err
 	}
 
-	obj, err := c.client.GetObject(ctx, *objID, &types.SuiObjectDataOptions{
-		ShowContent: true,
-		ShowOwner:   true,
-	})
+	var resp DynamicFieldsResponse
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal dynamic fields: %w", err)
+	}
+
+	return &resp, nil
+}
+
+// GetDynamicFieldObject fetches a specific dynamic field
+func (c *Client) GetDynamicFieldObject(parentID string, name DynamicFieldName) (*ObjectResponse, error) {
+	result, err := c.call("suix_getDynamicFieldObject", []interface{}{parentID, name})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get catalog: %w", err)
+		return nil, err
 	}
 
-	if obj.Data == nil || obj.Data.Content == nil {
-		return nil, fmt.Errorf("catalog not found")
+	var resp ObjectResponse
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal dynamic field object: %w", err)
 	}
 
-	// Parse the content
-	content, ok := obj.Data.Content.(map[string]interface{})
+	return &resp, nil
+}
+
+// ParseCatalog extracts catalog data from object content
+func ParseCatalog(data *ObjectData) map[string]interface{} {
+	if data == nil || data.Content == nil {
+		return nil
+	}
+
+	fields, ok := data.Content["fields"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid catalog content format")
+		return data.Content
 	}
-
-	fields, ok := content["fields"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid catalog fields format")
-	}
-
-	catalog := &model.Catalog{
-		ID:          catalogID,
-		Name:        fields["name"].(string),
-		Description: fields["description"].(string),
-	}
-
-	if owner, ok := fields["owner"].(string); ok {
-		catalog.Owner = owner
-	}
-	if count, ok := fields["count"].(float64); ok {
-		catalog.Count = uint64(count)
-	}
-
-	return catalog, nil
+	return fields
 }
 
-// GetCatalogEntries retrieves all entries from a catalog using dynamic field enumeration
-func (c *Client) GetCatalogEntries(ctx context.Context, catalogID string) ([]model.CatalogEntry, error) {
-	objID, err := sui_types.NewObjectIdFromHex(catalogID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid catalog ID: %w", err)
+// ParseCatalogEntry extracts entry data from dynamic field object
+func ParseCatalogEntry(data *ObjectData) map[string]interface{} {
+	if data == nil || data.Content == nil {
+		return nil
 	}
 
-	var entries []model.CatalogEntry
-	var cursor *sui_types.ObjectId
-
-	for {
-		// Get dynamic fields
-		resp, err := c.client.GetDynamicFields(ctx, *objID, cursor, 50)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get dynamic fields: %w", err)
-		}
-
-		for _, field := range resp.Data {
-			// Get the dynamic field object
-			fieldObj, err := c.client.GetDynamicFieldObject(ctx, *objID, field.Name)
-			if err != nil {
-				continue // Skip failed entries
-			}
-
-			if fieldObj.Data == nil || fieldObj.Data.Content == nil {
-				continue
-			}
-
-			// Parse entry
-			entry, err := parseCatalogEntry(field.Name, fieldObj.Data.Content)
-			if err != nil {
-				continue
-			}
-
-			entries = append(entries, *entry)
-		}
-
-		if !resp.HasNextPage || resp.NextCursor == nil {
-			break
-		}
-		cursor = resp.NextCursor
-	}
-
-	return entries, nil
-}
-
-func parseCatalogEntry(name types.DynamicFieldName, content interface{}) (*model.CatalogEntry, error) {
-	// Extract slug from name
-	slug := ""
-	if nameValue, ok := name.Value.(string); ok {
-		slug = nameValue
-	}
-
-	contentMap, ok := content.(map[string]interface{})
+	fields, ok := data.Content["fields"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid content format")
-	}
-
-	fields, ok := contentMap["fields"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid fields format")
+		return nil
 	}
 
 	value, ok := fields["value"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid value format")
+		return fields
 	}
 
 	valueFields, ok := value["fields"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid value fields format")
+		return value
 	}
 
-	entry := &model.CatalogEntry{
-		Slug: slug,
-	}
-
-	if cartridgeID, ok := valueFields["cartridge_id"].(string); ok {
-		entry.CartridgeID = cartridgeID
-	}
-	if title, ok := valueFields["title"].(string); ok {
-		entry.Title = title
-	}
-	if platform, ok := valueFields["platform"].(float64); ok {
-		entry.Platform = model.Platform(platform)
-	}
-	if sizeBytes, ok := valueFields["size_bytes"].(float64); ok {
-		entry.SizeBytes = uint64(sizeBytes)
-	}
-	if emulatorCore, ok := valueFields["emulator_core"].(string); ok {
-		entry.EmulatorCore = emulatorCore
-	}
-	if version, ok := valueFields["version"].(float64); ok {
-		entry.Version = uint16(version)
-	}
-
-	return entry, nil
+	return valueFields
 }
 
-// GetCartridge retrieves a cartridge object
-func (c *Client) GetCartridge(ctx context.Context, cartridgeID string) (*model.Cartridge, error) {
-	objID, err := sui_types.NewObjectIdFromHex(cartridgeID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid cartridge ID: %w", err)
-	}
-
-	obj, err := c.client.GetObject(ctx, *objID, &types.SuiObjectDataOptions{
-		ShowContent: true,
-		ShowOwner:   true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cartridge: %w", err)
-	}
-
-	if obj.Data == nil || obj.Data.Content == nil {
-		return nil, fmt.Errorf("cartridge not found")
-	}
-
-	// Parse the content
-	content, ok := obj.Data.Content.(map[string]interface{})
+// BytesArrayToHex converts a []interface{} of numbers to hex string
+func BytesArrayToHex(arr interface{}) string {
+	slice, ok := arr.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid cartridge content format")
+		return ""
 	}
-
-	fields, ok := content["fields"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid cartridge fields format")
-	}
-
-	cart := &model.Cartridge{
-		ID: cartridgeID,
-	}
-
-	if slug, ok := fields["slug"].(string); ok {
-		cart.Slug = slug
-	}
-	if title, ok := fields["title"].(string); ok {
-		cart.Title = title
-	}
-	if platform, ok := fields["platform"].(float64); ok {
-		cart.Platform = model.Platform(platform)
-	}
-	if emulatorCore, ok := fields["emulator_core"].(string); ok {
-		cart.EmulatorCore = emulatorCore
-	}
-	if version, ok := fields["version"].(float64); ok {
-		cart.Version = uint16(version)
-	}
-	if sizeBytes, ok := fields["size_bytes"].(float64); ok {
-		cart.SizeBytes = uint64(sizeBytes)
-	}
-	if publisher, ok := fields["publisher"].(string); ok {
-		cart.Publisher = publisher
-	}
-	if blobID, ok := fields["blob_id"].([]interface{}); ok {
-		cart.BlobID = bytesArrayToHex(blobID)
-	}
-	if sha256, ok := fields["sha256"].([]interface{}); ok {
-		cart.SHA256 = bytesArrayToHex(sha256)
-	}
-
-	return cart, nil
-}
-
-func bytesArrayToHex(arr []interface{}) string {
-	bytes := make([]byte, len(arr))
-	for i, v := range arr {
-		if f, ok := v.(float64); ok {
-			bytes[i] = byte(f)
+	
+	result := make([]byte, len(slice))
+	for i, v := range slice {
+		if num, ok := v.(float64); ok {
+			result[i] = byte(num)
 		}
 	}
-	return hex.EncodeToString(bytes)
+	return fmt.Sprintf("%x", result)
 }
-
