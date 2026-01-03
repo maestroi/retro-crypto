@@ -23,7 +23,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+    # Only run on push to main, merged PRs, or manual dispatch
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || 
+      github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
