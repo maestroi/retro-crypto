@@ -85,7 +85,7 @@
             </div>
 
             <!-- How to use -->
-            <div class="bg-gray-800/50 rounded-xl p-4 mb-6 border border-gray-700/50">
+            <div class="bg-gray-800/50 rounded-xl p-4 mb-4 border border-gray-700/50">
               <h3 class="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -106,6 +106,81 @@
                   Wait for download & verification – then play!
                 </li>
               </ol>
+            </div>
+
+            <!-- How Each Chain Works -->
+            <div class="mb-4">
+              <button 
+                @click="showChainInfo = !showChainInfo"
+                class="w-full flex items-center justify-between px-4 py-3 bg-gray-800/50 rounded-xl border border-gray-700/50 hover:bg-gray-800 transition-colors"
+              >
+                <span class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                  <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                  How Each Blockchain Works
+                </span>
+                <svg 
+                  class="w-4 h-4 text-gray-400 transition-transform duration-200" 
+                  :class="{ 'rotate-180': showChainInfo }"
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0 -translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-2"
+              >
+                <div v-if="showChainInfo" class="mt-3 space-y-3">
+                  <!-- Nimiq -->
+                  <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-lg">🟡</span>
+                      <h4 class="text-sm font-semibold text-yellow-400">Nimiq</h4>
+                    </div>
+                    <div class="text-xs text-gray-400 leading-relaxed space-y-1.5">
+                      <p>
+                        <span class="text-yellow-300 font-medium">Transaction-based storage</span> – Games are stored in transaction payloads on Nimiq's blockchain.
+                      </p>
+                      <p>
+                        Each game uses three payload types: <code class="px-1 py-0.5 bg-gray-800 rounded text-yellow-300">CART</code> (header with SHA256 hash), 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-yellow-300">DATA</code> (file chunks ~51 bytes each), and 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-yellow-300">CENT</code> (catalog entries).
+                      </p>
+                      <p>
+                        <span class="text-gray-300">Cost:</span> 64 bytes per 1 Luna. A 1MB game costs ~0.16 NIM (fraction of a cent!).
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Solana -->
+                  <div class="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-lg">🟣</span>
+                      <h4 class="text-sm font-semibold text-purple-400">Solana</h4>
+                    </div>
+                    <div class="text-xs text-gray-400 leading-relaxed space-y-1.5">
+                      <p>
+                        <span class="text-purple-300 font-medium">Account-based storage</span> – Games are stored in Program Derived Addresses (PDAs) controlled by a smart contract.
+                      </p>
+                      <p>
+                        Uses separate accounts for: <code class="px-1 py-0.5 bg-gray-800 rounded text-purple-300">Catalog</code> (game listings), 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-purple-300">Manifest</code> (game metadata), and 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-purple-300">Chunks</code> (file data ~900 bytes each).
+                      </p>
+                      <p>
+                        <span class="text-gray-300">Cost:</span> ~0.00696 SOL per KB (rent-exempt). A 1MB game costs ~7 SOL (~$1,000+). Experimental only!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
             </div>
 
             <!-- Keyboard shortcuts hint -->
@@ -188,6 +263,7 @@ const STORAGE_KEY_ACCEPTED = 'retro-crypto-disclaimer-accepted'
 
 const isOpen = ref(false)
 const disclaimerAccepted = ref(false)
+const showChainInfo = ref(false)
 
 const emit = defineEmits(['close'])
 
