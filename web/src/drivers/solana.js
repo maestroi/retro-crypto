@@ -18,6 +18,12 @@ const CHUNK_SEED = Buffer.from('chunk')
 const ENTRIES_PER_PAGE = 16
 const CATALOG_ENTRY_SIZE = 120
 
+// Rent calculation constants
+const RENT_PER_BYTE = 0.00000696 // SOL per byte (rent-exempt)
+const ACCOUNT_OVERHEAD = 128 // bytes per account
+const CHUNK_DATA_SIZE = 800 // default chunk data size (DEFAULT_CHUNK_SIZE)
+const MANIFEST_DATA_SIZE = 200 // approximate manifest data size
+
 // Ignored cartridge hashes (test/broken uploads)
 const IGNORED_CARTRIDGE_HASHES = new Set([
   // Add any cartridge hashes to ignore here
@@ -397,6 +403,25 @@ export function createSolanaDriver(rpcUrl) {
         }
       }
       
+      // Calculate total locked value (rent) using rent-per-byte calculation
+      // Use actual numChunks from manifest, or calculate from totalSize and chunkSize
+      const chunkSize = manifest.chunkSize || CHUNK_DATA_SIZE
+      const chunkCount = manifest.numChunks || Math.ceil(manifest.zipSize / chunkSize)
+      
+      // Calculate total bytes stored on-chain
+      const manifestBytes = ACCOUNT_OVERHEAD + MANIFEST_DATA_SIZE
+      const chunkBytes = chunkCount * (ACCOUNT_OVERHEAD + chunkSize)
+      const totalBytes = manifestBytes + chunkBytes
+      
+      // Calculate rent cost
+      const totalLockedValueSOL = totalBytes * RENT_PER_BYTE
+      const manifestRentSOL = manifestBytes * RENT_PER_BYTE
+      const chunkRentPerAccountSOL = (ACCOUNT_OVERHEAD + chunkSize) * RENT_PER_BYTE
+      const totalChunkRentSOL = chunkRentPerAccountSOL * chunkCount
+      
+      // Convert to lamports for consistency
+      const totalLockedValue = totalLockedValueSOL * 1e9
+      
       return {
         cartridgeId: bytesToHex(manifest.cartridgeId),
         totalSize: manifest.zipSize,
@@ -407,7 +432,12 @@ export function createSolanaDriver(rpcUrl) {
         createdSlot: manifest.createdSlot,
         publisher: manifest.publisher.toBase58(),
         platform: (metadata.platform || 'DOS').toUpperCase(),
-        metadata
+        metadata,
+        lockedValue: totalLockedValue, // Total locked value in lamports
+        lockedValueSOL: totalLockedValueSOL, // Total locked value in SOL
+        chunkRentPerAccount: chunkRentPerAccountSOL, // Rent per chunk in SOL
+        numChunks: chunkCount, // Number of chunks for display
+        totalBytes: totalBytes // Total bytes stored on-chain
       }
     },
     

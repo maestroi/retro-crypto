@@ -94,3 +94,18 @@ export function getPlatformInfo(platform) {
   return platforms[p] || { name: String(platform), icon: '🎮', color: 'text-gray-400', bg: 'bg-gray-400/10' }
 }
 
+export function formatPrice(value) {
+  if (value === undefined || value === null || isNaN(value)) return '0'
+  if (value === 0) return '0'
+  
+  // Format with appropriate decimal places
+  if (value >= 1) {
+    return value.toFixed(4).replace(/\.?0+$/, '')
+  } else if (value >= 0.01) {
+    return value.toFixed(4)
+  } else {
+    // For very small values, show more precision
+    return value.toFixed(6).replace(/\.?0+$/, '')
+  }
+}
+

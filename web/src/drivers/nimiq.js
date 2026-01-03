@@ -396,6 +396,15 @@ export function createNimiqDriver(rpcUrl) {
               }
               
               const isPublisherVerified = normalizedPublisher ? normalizeAddress(tx.from) === normalizedPublisher : true
+              
+              // Calculate total cost: 1 Luna per transaction
+              // Each chunk requires 1 transaction, plus 1 for the CART header
+              // chunkSize is the number of data bytes per chunk (typically 51)
+              const numChunks = Math.ceil(cart.totalSize / cart.chunkSize)
+              const totalTxs = numChunks + 1 // chunks + CART header
+              const totalCostLuna = totalTxs * 1 // 1 Luna per transaction
+              const totalCostNIM = totalCostLuna / 1e5 // Convert to NIM (1 NIM = 100,000 Luna)
+              
               return {
                 cartridgeId: cart.cartridgeId,
                 totalSize: cart.totalSize,
@@ -405,7 +414,10 @@ export function createNimiqDriver(rpcUrl) {
                 txHash: tx.hash,
                 height: tx.height || tx.blockNumber || 0,
                 publisherVerified: isPublisherVerified,
-                fromAddress: tx.from
+                fromAddress: tx.from,
+                numChunks: numChunks,
+                totalCostNIM: totalCostNIM,
+                totalTxs: totalTxs
               }
             }
           }
@@ -439,6 +451,15 @@ export function createNimiqDriver(rpcUrl) {
                 }
                 
                 const isPublisherVerified = normalizedPublisher ? normalizeAddress(tx.from) === normalizedPublisher : true
+                
+                // Calculate total cost: 1 Luna per transaction
+                // Each chunk requires 1 transaction, plus 1 for the CART header
+                // chunkSize is the number of data bytes per chunk (typically 51)
+                const numChunks = Math.ceil(cart.totalSize / cart.chunkSize)
+                const totalTxs = numChunks + 1 // chunks + CART header
+                const totalCostLuna = totalTxs * 1 // 1 Luna per transaction
+                const totalCostNIM = totalCostLuna / 1e5 // Convert to NIM (1 NIM = 100,000 Luna)
+                
                 return {
                   cartridgeId: cart.cartridgeId,
                   totalSize: cart.totalSize,
@@ -448,7 +469,10 @@ export function createNimiqDriver(rpcUrl) {
                   txHash: tx.hash,
                   height: tx.height || tx.blockNumber || 0,
                   publisherVerified: isPublisherVerified,
-                  fromAddress: tx.from
+                  fromAddress: tx.from,
+                  numChunks: numChunks,
+                  totalCostNIM: totalCostNIM,
+                  totalTxs: totalTxs
                 }
               }
             }

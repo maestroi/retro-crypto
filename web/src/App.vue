@@ -224,8 +224,8 @@ const {
   initialize
 } = protocol
 
-// Developer Mode
-const developerMode = ref(false)
+// Use developer mode from protocol composable
+const developerMode = protocol.developerMode
 
 // Game selection
 const selectedPlatform = ref(null)

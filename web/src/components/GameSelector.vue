@@ -185,6 +185,27 @@
                 </span>
               </dd>
             </div>
+            <!-- Price/Locked Value -->
+            <div v-if="cartHeader && (cartHeader.lockedValueSOL !== undefined || cartHeader.totalCostNIM !== undefined)">
+              <dt class="text-xs font-medium text-gray-400">
+                <span v-if="cartHeader.lockedValueSOL !== undefined">Locked Rent</span>
+                <span v-else>Total Cost</span>
+              </dt>
+              <dd class="mt-0.5 text-sm text-white">
+                <span v-if="cartHeader.lockedValueSOL !== undefined">
+                  ◎ {{ formatPrice(cartHeader.lockedValueSOL) }} SOL
+                  <span v-if="cartHeader.numChunks && cartHeader.chunkRentPerAccount" class="text-xs text-gray-400 block mt-0.5">
+                    {{ cartHeader.numChunks.toLocaleString() }} chunks × ~{{ formatPrice(cartHeader.chunkRentPerAccount) }} SOL each
+                  </span>
+                </span>
+                <span v-else-if="cartHeader.totalCostNIM !== undefined">
+                  {{ formatPrice(cartHeader.totalCostNIM) }} NIM
+                  <span v-if="cartHeader.numChunks && cartHeader.totalTxs" class="text-xs text-gray-400 block mt-0.5">
+                    {{ cartHeader.totalTxs.toLocaleString() }} transactions ({{ cartHeader.numChunks.toLocaleString() }} chunks + 1 CART) × 1 Luna
+                  </span>
+                </span>
+              </dd>
+            </div>
           </dl>
         </div>
 
@@ -294,7 +315,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { formatBytes, formatHash, copyToClipboard, estimateDownloadTime } from '../utils.js'
+import { formatBytes, formatHash, copyToClipboard, estimateDownloadTime, formatPrice } from '../utils.js'
 import LoadingSkeleton from './LoadingSkeleton.vue'
 
 const props = defineProps({

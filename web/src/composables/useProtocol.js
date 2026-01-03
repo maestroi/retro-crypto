@@ -9,17 +9,32 @@ import { ref, computed, watch, shallowRef } from 'vue'
 import { createDriver, getProtocolConfig, getAllProtocols } from '../drivers/index.js'
 import { useCache } from './useCache.js'
 
+// localStorage keys
+const STORAGE_KEY_PROTOCOL = 'retro-crypto-protocol'
+const STORAGE_KEY_RPC_URL = 'retro-crypto-rpc-url'
+const STORAGE_KEY_CUSTOM_RPC = 'retro-crypto-custom-rpc'
+const STORAGE_KEY_CATALOG = 'retro-crypto-catalog'
+const STORAGE_KEY_CUSTOM_CATALOG = 'retro-crypto-custom-catalog'
+const STORAGE_KEY_DEVELOPER_MODE = 'retro-crypto-developer-mode'
+
 /**
  * Create a universal protocol composable
  * @returns {Object} Protocol state and methods
  */
 export function useProtocol() {
-  // Protocol selection
-  const selectedProtocolId = ref('nimiq')
-  const selectedRpcUrl = ref('')
-  const customRpcUrl = ref('')
-  const selectedCatalogName = ref('')
-  const customCatalogAddress = ref('')
+  // Load saved protocol settings from localStorage
+  const savedProtocol = localStorage.getItem(STORAGE_KEY_PROTOCOL)
+  const savedRpcUrl = localStorage.getItem(STORAGE_KEY_RPC_URL)
+  const savedCustomRpc = localStorage.getItem(STORAGE_KEY_CUSTOM_RPC)
+  const savedCatalog = localStorage.getItem(STORAGE_KEY_CATALOG)
+  const savedCustomCatalog = localStorage.getItem(STORAGE_KEY_CUSTOM_CATALOG)
+  
+  // Protocol selection - use saved value or default to nimiq
+  const selectedProtocolId = ref(savedProtocol || 'nimiq')
+  const selectedRpcUrl = ref(savedRpcUrl || '')
+  const customRpcUrl = ref(savedCustomRpc || '')
+  const selectedCatalogName = ref(savedCatalog || '')
+  const customCatalogAddress = ref(savedCustomCatalog || '')
   
   // Driver instance (shallowRef to avoid deep reactivity)
   const driver = shallowRef(null)
@@ -70,9 +85,15 @@ export function useProtocol() {
     statusMessage: ''
   })
   
-  // Developer mode
-  const developerMode = ref(false)
+  // Developer mode - load from localStorage
+  const savedDeveloperMode = localStorage.getItem(STORAGE_KEY_DEVELOPER_MODE) === 'true'
+  const developerMode = ref(savedDeveloperMode)
   const showRetiredGames = ref(false)
+  
+  // Watch developer mode and save to localStorage
+  watch(developerMode, (value) => {
+    localStorage.setItem(STORAGE_KEY_DEVELOPER_MODE, value ? 'true' : 'false')
+  })
   
   // Visible catalogs (hide devOnly unless in developer mode)
   const visibleCatalogs = computed(() => {
@@ -114,10 +135,33 @@ export function useProtocol() {
   function setProtocol(protocolId) {
     selectedProtocolId.value = protocolId
     const config = getProtocolConfig(protocolId)
-    selectedRpcUrl.value = config?.defaultRpc || ''
-    selectedCatalogName.value = config?.defaultCatalog || ''
+    
+    // Use saved settings for this protocol, or defaults
+    const protocolKey = `${STORAGE_KEY_RPC_URL}-${protocolId}`
+    const savedRpc = localStorage.getItem(protocolKey)
+    
+    if (savedRpc) {
+      selectedRpcUrl.value = savedRpc
+    } else {
+      selectedRpcUrl.value = config?.defaultRpc || ''
+    }
+    
+    const catalogKey = `${STORAGE_KEY_CATALOG}-${protocolId}`
+    const savedCatalog = localStorage.getItem(catalogKey)
+    
+    if (savedCatalog) {
+      selectedCatalogName.value = savedCatalog
+    } else {
+      selectedCatalogName.value = config?.defaultCatalog || ''
+    }
+    
     customRpcUrl.value = ''
     customCatalogAddress.value = ''
+    
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY_PROTOCOL, protocolId)
+    localStorage.setItem(protocolKey, selectedRpcUrl.value)
+    localStorage.setItem(catalogKey, selectedCatalogName.value)
     
     // Reset state
     resetState()
@@ -131,6 +175,9 @@ export function useProtocol() {
     selectedRpcUrl.value = url
     if (url !== 'custom') {
       customRpcUrl.value = ''
+      // Save to localStorage
+      const protocolKey = `${STORAGE_KEY_RPC_URL}-${selectedProtocolId.value}`
+      localStorage.setItem(protocolKey, url)
       initDriver()
     }
   }
@@ -140,6 +187,8 @@ export function useProtocol() {
    */
   function setCustomRpcUrl(url) {
     customRpcUrl.value = url
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY_CUSTOM_RPC, url || '')
     if (url) initDriver()
   }
   
@@ -151,6 +200,9 @@ export function useProtocol() {
     if (catalogName !== 'Custom...') {
       customCatalogAddress.value = ''
     }
+    // Save to localStorage
+    const catalogKey = `${STORAGE_KEY_CATALOG}-${selectedProtocolId.value}`
+    localStorage.setItem(catalogKey, catalogName)
     resetGameState()
   }
   
@@ -159,6 +211,8 @@ export function useProtocol() {
    */
   function setCustomCatalogAddress(address) {
     customCatalogAddress.value = address
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY_CUSTOM_CATALOG, address || '')
     resetGameState()
   }
   
@@ -400,12 +454,28 @@ export function useProtocol() {
   // Initialize on mount
   function initialize() {
     const config = getProtocolConfig(selectedProtocolId.value)
+    
+    // Load protocol-specific settings if available
+    const protocolKey = `${STORAGE_KEY_RPC_URL}-${selectedProtocolId.value}`
+    const catalogKey = `${STORAGE_KEY_CATALOG}-${selectedProtocolId.value}`
+    const savedRpc = localStorage.getItem(protocolKey)
+    const savedCatalog = localStorage.getItem(catalogKey)
+    
     if (!selectedRpcUrl.value) {
-      selectedRpcUrl.value = config?.defaultRpc || ''
+      selectedRpcUrl.value = savedRpc || config?.defaultRpc || ''
     }
     if (!selectedCatalogName.value) {
-      selectedCatalogName.value = config?.defaultCatalog || ''
+      selectedCatalogName.value = savedCatalog || config?.defaultCatalog || ''
     }
+    
+    // Load custom settings
+    if (savedCustomRpc) {
+      customRpcUrl.value = savedCustomRpc
+    }
+    if (savedCustomCatalog) {
+      customCatalogAddress.value = savedCustomCatalog
+    }
+    
     initDriver()
   }
   
