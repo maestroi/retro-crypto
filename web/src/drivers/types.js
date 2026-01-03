@@ -165,6 +165,27 @@ export const PROTOCOL_CONFIGS = {
     defaultRpc: 'https://rpc-solana-retro.maestroi.cc',
     defaultCatalog: 'Testnet',
     publisherAddress: ''
+  },
+  sui: {
+    id: 'sui',
+    name: 'Sui + Walrus',
+    icon: '🔵',
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-400/10',
+    rpcEndpoints: [
+      { name: 'Sui Testnet', url: 'https://fullnode.testnet.sui.io:443' },
+      { name: 'Sui Devnet', url: 'https://fullnode.devnet.sui.io:443' },
+      { name: 'Sui Mainnet', url: 'https://fullnode.mainnet.sui.io:443' },
+      { name: 'Custom...', url: 'custom' }
+    ],
+    catalogs: [
+      { name: 'Testnet Games', address: '' }, // Set via VITE_SUI_CATALOG_ID env var
+      { name: 'Custom...', address: 'custom' }
+    ],
+    defaultRpc: 'https://fullnode.testnet.sui.io:443',
+    defaultCatalog: 'Testnet Games',
+    publisherAddress: '',
+    walrusAggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space'
   }
 }
 
