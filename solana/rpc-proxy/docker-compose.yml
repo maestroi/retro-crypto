@@ -1,0 +1,17 @@
+services:
+  rpc-proxy:
+    # image: ghcr.io/maestroi/solana-retro-rpc-proxy:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - target: 8899
+        published: 8899
+        protocol: tcp
+        mode: host  # Use host mode for Traefik to see real client IPs
+    volumes:
+      # Mount local config.json into container
+      - ./config.json:/app/config.json:ro
+    command:
+      # Use config file for all settings
+      - "-config=/app/config.json"

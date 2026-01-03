@@ -1,0 +1,137 @@
+name: Release SDK
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'  # Triggers on tags like sdk-v1.0.0
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create release for (e.g., sdk-v1.0.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: solana/sdk/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./solana/sdk
+        run: npm ci
+      
+      - name: Build SDK
+        working-directory: ./solana/sdk
+        run: npm run build
+      
+      - name: Run tests
+        working-directory: ./solana/sdk
+        run: npm test
+      
+      - name: Get version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/sdk-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/sdk-v}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+            VERSION="${TAG#sdk-v}"
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building SDK version: $VERSION"
+      
+      - name: Update package.json version
+        working-directory: ./solana/sdk
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+      
+      - name: Create tarball
+        working-directory: ./solana/sdk
+        run: |
+          npm pack
+          mv *.tgz ../sdk-package.tgz
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-package
+          path: sdk-package.tgz
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Get version
+        id: version
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#sdk-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-package
+          path: .
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: SDK ${{ steps.tag.outputs.tag }}
+          body: |
+            ## @solana-retro/sdk ${{ steps.version.outputs.version }}
+            
+            TypeScript SDK for interacting with the Solana cartridge storage program.
+            
+            ### Installation
+            
+            ```bash
+            npm install @solana-retro/sdk@${{ steps.version.outputs.version }}
+            ```
+            
+            ### Usage
+            
+            ```typescript
+            import { CartridgeClient } from '@solana-retro/sdk';
+            
+            const client = new CartridgeClient('devnet');
+            const { entries } = await client.listCartridges();
+            ```
+            
+            See [README](https://github.com/${{ github.repository }}/blob/main/solana/sdk/README.md) for full documentation.
+          files: |
+            sdk-package.tgz
+          draft: false
+          prerelease: false
+

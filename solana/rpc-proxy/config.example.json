@@ -1,0 +1,25 @@
+{
+  "listen_addr": ":8899",
+  "upstream_url": "https://your-paid-rpc-endpoint.com",
+  
+  "rate_limit_mode": "per_ip",
+  "global_rate_limit": 200,
+  "global_burst_size": 500,
+  "per_ip_rate_limit": 100,
+  "per_ip_burst_size": 300,
+  
+  "wait_for_slot": true,
+  "max_wait_time": "10s",
+  
+  "max_body_size": 10485760,
+  "timeout": "30s",
+  "enable_cors": true,
+  "allowed_origins": ["*"],
+  "log_requests": true,
+  "enable_metrics": true,
+  "ip_limiter_ttl": "10m",
+  "allowed_methods": [
+    "getAccountInfo",
+    "getMultipleAccounts"
+  ]
+}
