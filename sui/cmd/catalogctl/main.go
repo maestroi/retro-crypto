@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/retro-crypto/sui/internal/config"
 	"github.com/retro-crypto/sui/internal/model"
 	"github.com/retro-crypto/sui/internal/sui"
 	"github.com/retro-crypto/sui/internal/walrus"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -478,4 +478,3 @@ func truncate(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
-
