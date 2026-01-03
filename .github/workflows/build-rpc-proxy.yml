@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'solana/rpc-proxy/**'
-      - '.github/build-rpc-proxy.yml'
+      - '.github/workflows/build-rpc-proxy.yml'
     tags:
       - 'rpc-proxy-v*'  # Triggers on tags like rpc-proxy-v1.0.0
   pull_request:
