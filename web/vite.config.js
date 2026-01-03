@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     tailwindcss(),
   ],
-  base: '/',
+  base: process.env.GITHUB_PAGES ? '/retro-crypto/' : '/',
   server: {
     host: '0.0.0.0',
     port: 5173,
