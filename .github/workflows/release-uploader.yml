@@ -92,15 +92,18 @@ jobs:
       - name: Get tag name
         id: tag
         run: |
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          BASE_TAG="${GITHUB_REF#refs/tags/}"
+          COMPONENT_TAG="nimiq-uploader-${BASE_TAG}"
+          echo "tag=${COMPONENT_TAG}" >> $GITHUB_OUTPUT
+          echo "base_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: Nimiq Uploader ${{ github.ref_name }}
+          name: Nimiq Uploader ${{ steps.tag.outputs.base_tag }}
           body: |
-            ## Nimiq Uploader ${{ github.ref_name }}
+            ## Nimiq Uploader ${{ steps.tag.outputs.base_tag }}
             
             CLI tool for uploading games to the Nimiq blockchain.
             
@@ -116,28 +119,28 @@ jobs:
             
             **macOS (Apple Silicon):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/nimiq-uploader-darwin-arm64 -o nimiq-uploader
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/nimiq-uploader-darwin-arm64 -o nimiq-uploader
             chmod +x nimiq-uploader
             sudo mv nimiq-uploader /usr/local/bin/
             ```
             
             **macOS (Intel):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/nimiq-uploader-darwin-amd64 -o nimiq-uploader
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/nimiq-uploader-darwin-amd64 -o nimiq-uploader
             chmod +x nimiq-uploader
             sudo mv nimiq-uploader /usr/local/bin/
             ```
             
             **Linux (x64):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/nimiq-uploader-linux-amd64 -o nimiq-uploader
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/nimiq-uploader-linux-amd64 -o nimiq-uploader
             chmod +x nimiq-uploader
             sudo mv nimiq-uploader /usr/local/bin/
             ```
             
             **Linux (ARM64):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/nimiq-uploader-linux-arm64 -o nimiq-uploader
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/nimiq-uploader-linux-arm64 -o nimiq-uploader
             chmod +x nimiq-uploader
             sudo mv nimiq-uploader /usr/local/bin/
             ```

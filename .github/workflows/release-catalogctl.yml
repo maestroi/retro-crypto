@@ -92,15 +92,18 @@ jobs:
       - name: Get tag name
         id: tag
         run: |
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          BASE_TAG="${GITHUB_REF#refs/tags/}"
+          COMPONENT_TAG="catalogctl-${BASE_TAG}"
+          echo "tag=${COMPONENT_TAG}" >> $GITHUB_OUTPUT
+          echo "base_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: catalogctl ${{ github.ref_name }}
+          name: catalogctl ${{ steps.tag.outputs.base_tag }}
           body: |
-            ## catalogctl ${{ github.ref_name }}
+            ## catalogctl ${{ steps.tag.outputs.base_tag }}
             
             CLI tool for managing Sui/Walrus game catalogs.
             
@@ -108,14 +111,14 @@ jobs:
             
             ```bash
             # Download and install
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-linux-amd64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-linux-amd64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```
             
             Or for macOS (Apple Silicon):
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-darwin-arm64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-darwin-arm64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```
@@ -124,28 +127,28 @@ jobs:
             
             **macOS (Apple Silicon):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-darwin-arm64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-darwin-arm64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```
             
             **macOS (Intel):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-darwin-amd64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-darwin-amd64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```
             
             **Linux (x64):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-linux-amd64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-linux-amd64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```
             
             **Linux (ARM64):**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/catalogctl-linux-arm64 -o catalogctl
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/catalogctl-linux-arm64 -o catalogctl
             chmod +x catalogctl
             sudo mv catalogctl /usr/local/bin/
             ```

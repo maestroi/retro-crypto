@@ -102,15 +102,18 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            BASE_TAG="${{ github.event.inputs.tag }}"
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            BASE_TAG="${GITHUB_REF#refs/tags/}"
           fi
+          COMPONENT_TAG="cli-${BASE_TAG}"
+          echo "tag=${COMPONENT_TAG}" >> $GITHUB_OUTPUT
+          echo "base_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
       
       - name: Get version
         id: version
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          TAG="${{ steps.tag.outputs.base_tag }}"
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
@@ -132,7 +135,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: CLI ${{ steps.tag.outputs.tag }}
+          name: CLI ${{ steps.tag.outputs.base_tag }}
           body: |
             ## @solana-retro/cli ${{ steps.version.outputs.version }}
             
