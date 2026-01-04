@@ -1,6 +1,6 @@
 # Retro Crypto
 
-A decentralized retro gaming platform that stores classic games on the blockchain. Play DOS, Game Boy, Game Boy Color, and NES games directly in your browser, with games stored immutably on Nimiq or Solana blockchains.
+A decentralized retro gaming platform that stores classic games on the blockchain. Play DOS, Game Boy, Game Boy Color, and NES games directly in your browser, with games stored immutably on Nimiq, Solana, or Sui blockchains.
 
 ## 🎮 Live Demo
 
@@ -11,8 +11,8 @@ A decentralized retro gaming platform that stores classic games on the blockchai
 Retro Crypto is a full-stack platform for storing and playing retro games on the blockchain:
 
 - **Web Frontend** - Play games in your browser with integrated emulators
-- **Blockchain Storage** - Games stored as chunked data on Nimiq or Solana
-- **Multi-Protocol Support** - Switch between Nimiq and Solana protocols
+- **Blockchain Storage** - Games stored as chunked data on Nimiq, Solana, or Sui (with Walrus blob storage)
+- **Multi-Protocol Support** - Switch between Nimiq, Solana, and Sui protocols
 - **Multiple Platforms** - DOS, Game Boy (GB), Game Boy Color (GBC), and NES emulators
 - **Developer Tools** - Upload games, manage catalogs, and interact with the blockchain
 
@@ -27,6 +27,10 @@ retro-crypto/
 │   ├── program/            # Solana on-chain program (Anchor)
 │   ├── sdk/                # TypeScript SDK for Solana
 │   └── rpc-proxy/          # Rate-limited RPC proxy for Solana
+├── sui/
+│   ├── contracts/          # Sui Move contracts (catalog, cartridge, registry)
+│   ├── cmd/catalogctl/     # CLI tool for managing Sui catalogs
+│   └── internal/           # Internal Go packages (Sui client, Walrus client)
 └── games/                  # Game files (if any)
 ```
 
@@ -41,9 +45,10 @@ retro-crypto/
 ### Supported Blockchains
 - **Nimiq** - Native blockchain integration
 - **Solana** - Solana program-based storage
+- **Sui** - Sui Move contracts with Walrus decentralized blob storage
 
 ### Web Frontend Features
-- Multi-protocol support (switch between Nimiq and Solana)
+- Multi-protocol support (switch between Nimiq, Solana, and Sui)
 - Game catalog browsing
 - Automatic game downloading and caching
 - Recently played games
@@ -85,7 +90,7 @@ Output in `web/dist/` - deploy to any static hosting (GitHub Pages, Netlify, Ver
 
 #### Usage
 
-1. **Select Protocol** - Choose Nimiq or Solana from the header
+1. **Select Protocol** - Choose Nimiq, Solana, or Sui from the header
 2. **Configure RPC** - Set your RPC endpoint (or use default)
 3. **Select Catalog** - Choose a game catalog to browse
 4. **Choose Platform** - Filter by DOS, GB, GBC, or NES
@@ -271,6 +276,114 @@ docker run -p 8899:8899 \
 
 See [solana/rpc-proxy/README.md](solana/rpc-proxy/README.md) for full documentation.
 
+### Sui + Walrus
+
+Sui blockchain integration with Walrus decentralized blob storage. Games are stored as blobs on Walrus with metadata on Sui.
+
+#### Prerequisites
+
+1. **Install Sui CLI**
+   ```bash
+   # macOS
+   brew install sui
+   
+   # Or from source
+   cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+   ```
+
+2. **Get Testnet SUI Tokens**
+   ```bash
+   sui client new-address ed25519
+   sui client faucet
+   ```
+
+#### Building catalogctl
+
+```bash
+cd sui
+go build -o catalogctl ./cmd/catalogctl
+```
+
+#### Quick Start
+
+1. **Deploy Move Contracts**
+   ```bash
+   cd sui/contracts
+   sui client publish --gas-budget 100000000
+   # Note the Package ID from output
+   ```
+
+2. **Configure CLI**
+   
+   Create `config.json` in the `sui/` directory:
+   ```json
+   {
+     "sui_network": "testnet",
+     "sui_rpc_url": "https://fullnode.testnet.sui.io:443",
+     "walrus_network": "testnet",
+     "walrus_aggregator_url": "https://aggregator.walrus-testnet.walrus.space",
+     "walrus_publisher_url": "https://publisher.walrus-testnet.walrus.space",
+     "package_id": "0xYOUR_PACKAGE_ID",
+     "catalog_id": "",
+     "private_key": "your_hex_private_key_here"
+   }
+   ```
+
+3. **Create Catalog**
+   ```bash
+   ./catalogctl gen-create-catalog --name "My Games" --description "My game collection"
+   # Run the generated sui client call command
+   # Note the Catalog Object ID
+   ```
+
+4. **Upload Game to Walrus**
+   ```bash
+   ./catalogctl upload-blob --file game.zip
+   # Note the blob_id and sha256 from output
+   ```
+
+5. **Create Cartridge**
+   
+   Use the `sui client call` command printed by `upload-blob`, or generate manually:
+   ```bash
+   sui client call \
+     --package 0xYOUR_PACKAGE_ID \
+     --module cartridge \
+     --function create_cartridge \
+     --args "game-slug" "Game Title" 3 "jsnes" 1 0xBLOB_ID 0xSHA256 12345 1704000000000 \
+     --gas-budget 10000000
+   ```
+
+6. **Add to Catalog**
+   ```bash
+   ./catalogctl gen-add-entry \
+     --catalog 0xCATALOG_ID \
+     --slug "game-slug" \
+     --cartridge 0xCARTRIDGE_ID \
+     --title "Game Title" \
+     --platform nes \
+     --size 12345
+   # Run the generated sui client call command
+   ```
+
+#### Platform Codes
+- `0` - DOS
+- `1` - GB
+- `2` - GBC
+- `3` - NES
+- `4` - SNES
+
+#### Frontend Configuration
+
+Add to `.env` in `/web`:
+```env
+VITE_SUI_RPC_URL=https://fullnode.testnet.sui.io:443
+VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
+VITE_SUI_CATALOG_ID=0xYOUR_CATALOG_ID
+```
+
+See [sui/README.md](sui/README.md) for full documentation.
+
 ## Game Format
 
 Games must be packaged as ZIP files with a `run.json` manifest:
@@ -359,13 +472,20 @@ Games must be packaged as ZIP files with a `run.json` manifest:
 ### Solana RPC Proxy
 - Go 1.21+
 
+### Sui + Walrus
+- Go 1.21+
+- Sui CLI
+- Sui testnet account with SUI tokens
+
 ## Architecture
 
 ### Storage Format
 
-Games are stored using a chunked storage format:
+Games are stored using different formats depending on the blockchain:
+- **Nimiq** - Chunked storage (51-byte chunks in transactions)
+- **Solana** - Chunked storage (128KB chunks in accounts)
+- **Sui** - Single blob storage on Walrus with metadata on Sui (no chunking)
 - **Manifest** - Metadata (size, hash, chunk count, platform)
-- **Chunks** - Raw data chunks (typically 51 bytes for Nimiq, 128KB for Solana)
 - **Catalog** - Index of available games
 
 ### Protocol Drivers
@@ -373,6 +493,7 @@ Games are stored using a chunked storage format:
 The web frontend uses protocol drivers to abstract blockchain differences:
 - `drivers/nimiq.js` - Nimiq blockchain integration
 - `drivers/solana.js` - Solana blockchain integration
+- `drivers/suiWalrus.js` - Sui blockchain + Walrus blob storage integration
 - `drivers/types.js` - Protocol configuration
 
 ### Emulators

@@ -89,9 +89,15 @@ jobs:
           name: binaries
           path: dist/
 
+      - name: Get tag name
+        id: tag
+        run: |
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
           name: Nimiq Uploader ${{ github.ref_name }}
           body: |
             ## Nimiq Uploader ${{ github.ref_name }}
