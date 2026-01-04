@@ -14,12 +14,13 @@
 import { verifySHA256, bytesToHex } from '../utils/payloads.js'
 import { loadSuiWalrusConfig } from './suiWalrusConfig.js'
 
-// Full Base58 alphabet including lowercase 'l' (used by Walrus)
-// Same as Go implementation: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+// Standard Base58 alphabet (Bitcoin/base58btc) - 58 characters
+// Excludes: 0, O, I, l (zero, uppercase O, uppercase I, lowercase L)
+// This is the alphabet used by Walrus blob IDs
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 /**
- * Decode base58 string to bytes (matching Go implementation)
+ * Decode base58 string to bytes using standard Bitcoin alphabet
  * Uses big integer conversion to match Go's math/big behavior
  */
 function base58Decode(s) {
@@ -57,7 +58,7 @@ function base58Decode(s) {
 }
 
 /**
- * Encode bytes to base58 string (matching Go implementation)
+ * Encode bytes to base58 string using standard Bitcoin alphabet
  */
 function base58Encode(bytes) {
   if (!bytes || bytes.length === 0) return ''
