@@ -346,13 +346,21 @@ function getProtocolFromUrl() {
   // Remove base path if on GitHub Pages
   const base = import.meta.env.BASE_URL || '/'
   let path = pathname
-  if (base !== '/' && pathname.startsWith(base)) {
-    // Remove base path, but keep leading slash
-    path = pathname.slice(base.length)
-    if (!path.startsWith('/')) {
-      path = '/' + path
+  
+  if (base !== '/') {
+    // Normalize base path (remove trailing slash for comparison)
+    const baseNormalized = base.endsWith('/') ? base.slice(0, -1) : base
+    // Check if pathname starts with base (with or without trailing slash)
+    if (pathname.startsWith(baseNormalized + '/') || pathname === baseNormalized) {
+      // Remove base path
+      path = pathname.slice(baseNormalized.length)
+      // Ensure path starts with /
+      if (!path.startsWith('/')) {
+        path = '/' + path
+      }
     }
   }
+  
   const protocol = path.split('/').filter(Boolean)[0] // Get first non-empty segment
   if (protocol === 'nimiq' || protocol === 'solana' || protocol === 'sui') {
     return protocol
