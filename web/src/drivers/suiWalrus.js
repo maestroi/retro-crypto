@@ -14,13 +14,13 @@
 import { verifySHA256, bytesToHex } from '../utils/payloads.js'
 import { loadSuiWalrusConfig } from './suiWalrusConfig.js'
 
-// Standard Base58 alphabet (Bitcoin/base58btc) - 58 characters
-// Excludes: 0, O, I, l (zero, uppercase O, uppercase I, lowercase L)
-// This is the alphabet used by Walrus blob IDs
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+// Walrus Base58 alphabet (59 characters)
+// Excludes: 0, O, I (zero, uppercase O, uppercase I)
+// Includes lowercase 'l' unlike standard Bitcoin base58
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
 /**
- * Decode base58 string to bytes using standard Bitcoin alphabet
+ * Decode base58 string to bytes using Walrus alphabet
  * Uses big integer conversion to match Go's math/big behavior
  */
 function base58Decode(s) {
@@ -28,7 +28,7 @@ function base58Decode(s) {
   
   // Convert to big integer (like Go's big.Int)
   let bigInt = BigInt(0)
-  const radix = BigInt(58)
+  const radix = BigInt(59) // Must match alphabet length
   
   for (let i = 0; i < s.length; i++) {
     const char = s[i]
@@ -58,7 +58,7 @@ function base58Decode(s) {
 }
 
 /**
- * Encode bytes to base58 string using standard Bitcoin alphabet
+ * Encode bytes to base58 string using Walrus alphabet
  */
 function base58Encode(bytes) {
   if (!bytes || bytes.length === 0) return ''
@@ -78,7 +78,7 @@ function base58Encode(bytes) {
   // Encode (matching Go's DivMod logic)
   const result = []
   let num = bigInt
-  const radix = BigInt(58)
+  const radix = BigInt(59) // Must match alphabet length
   while (num > 0n) {
     const mod = num % radix
     result.unshift(BASE58_ALPHABET[Number(mod)])

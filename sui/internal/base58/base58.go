@@ -1,4 +1,4 @@
-// Package base58 provides Base58 encoding/decoding using the standard Bitcoin alphabet
+// Package base58 provides Base58 encoding/decoding for Walrus blob IDs
 package base58
 
 import (
@@ -6,14 +6,14 @@ import (
 	"math/big"
 )
 
-// Base58Alphabet is the standard Bitcoin/base58btc alphabet (58 characters)
-// Excludes: 0, O, I, l (zero, uppercase O, uppercase I, lowercase L)
-// This is the alphabet used by Walrus blob IDs
-const Base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+// WalrusBase58Alphabet is the alphabet used by Walrus blob IDs (59 characters)
+// Excludes: 0, O, I (zero, uppercase O, uppercase I)
+// Includes lowercase 'l' unlike standard Bitcoin base58
+const WalrusBase58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 var (
-	alphabet = []byte(Base58Alphabet)
-	bigRadix = big.NewInt(58)
+	alphabet = []byte(WalrusBase58Alphabet)
+	bigRadix = big.NewInt(59) // Must match alphabet length
 	zero     = big.NewInt(0)
 )
 
