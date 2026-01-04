@@ -58,7 +58,7 @@
                     </svg>
                   </div>
                   <p class="text-sm text-gray-400">
-                    <span class="text-gray-200 font-medium">Multi-Chain</span> – Supports Nimiq, Solana, and more
+                    <span class="text-gray-200 font-medium">Multi-Chain</span> – Supports Nimiq, Solana, Sui, and more
                   </p>
                 </div>
                 <div class="flex items-start gap-3">
@@ -95,7 +95,7 @@
               <ol class="text-sm text-gray-400 space-y-2">
                 <li class="flex gap-2">
                   <span class="text-amber-400 font-mono">1.</span>
-                  Choose your blockchain (Nimiq or Solana)
+                  Choose your blockchain (Nimiq, Solana, or Sui)
                 </li>
                 <li class="flex gap-2">
                   <span class="text-amber-400 font-mono">2.</span>
@@ -154,7 +154,9 @@
                         <code class="px-1 py-0.5 bg-gray-800 rounded text-yellow-300">CENT</code> (catalog entries).
                       </p>
                       <p>
-                        <span class="text-gray-300">Cost:</span> 64 bytes per 1 Luna. A 1MB game costs ~0.16 NIM (fraction of a cent!).
+                        <span class="text-gray-300">Cost:</span> 64 bytes per 1 Luna. A 1MB game costs ~0.16 NIM
+                        <span v-if="nimiqUsdPrice" class="text-gray-500">(~${{ formatUsdPrice(0.16 * nimiqUsdPrice) }})</span>
+                        <span v-else class="text-gray-500">(fraction of a cent!)</span>.
                       </p>
                     </div>
                   </div>
@@ -176,6 +178,30 @@
                       </p>
                       <p>
                         <span class="text-gray-300">Cost:</span> ~0.00696 SOL per KB (rent-exempt). A 1MB game costs ~7 SOL (~$1,000+). Experimental only!
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Sui + Walrus -->
+                  <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-lg">🔵</span>
+                      <h4 class="text-sm font-semibold text-blue-400">Sui + Walrus</h4>
+                    </div>
+                    <div class="text-xs text-gray-400 leading-relaxed space-y-1.5">
+                      <p>
+                        <span class="text-blue-300 font-medium">Hybrid storage</span> – Game metadata stored on Sui blockchain, game files stored on Walrus decentralized blob storage.
+                      </p>
+                      <p>
+                        Sui stores: <code class="px-1 py-0.5 bg-gray-800 rounded text-blue-300">Catalog</code> (curated game lists as shared objects), 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-blue-300">Cartridge</code> (game metadata with Walrus blob ID), and 
+                        <code class="px-1 py-0.5 bg-gray-800 rounded text-blue-300">Dynamic Fields</code> (catalog entries).
+                      </p>
+                      <p>
+                        Walrus stores: <code class="px-1 py-0.5 bg-gray-800 rounded text-blue-300">ZIP blobs</code> (one blob per game, content-addressed). Games are downloaded from Walrus and verified using SHA256.
+                      </p>
+                      <p>
+                        <span class="text-gray-300">Cost:</span> Creating a cartridge costs ~0.02-0.05 SUI (gas), adding to catalog ~0.01-0.02 SUI. A typical cartridge costs ~0.03-0.07 SUI total. Walrus blob storage is decentralized and cost-effective for large files.
                       </p>
                     </div>
                   </div>
@@ -264,10 +290,37 @@ const STORAGE_KEY_ACCEPTED = 'retro-crypto-disclaimer-accepted'
 const isOpen = ref(false)
 const disclaimerAccepted = ref(false)
 const showChainInfo = ref(false)
+const nimiqUsdPrice = ref(null)
 
 const emit = defineEmits(['close'])
 
+// Fetch Nimiq USD price from CoinGecko
+async function fetchNimiqPrice() {
+  try {
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=nimiq&vs_currencies=usd')
+    const data = await response.json()
+    if (data.nimiq && data.nimiq.usd) {
+      nimiqUsdPrice.value = data.nimiq.usd
+    }
+  } catch (error) {
+    console.warn('Failed to fetch Nimiq price:', error)
+    // Silently fail - price is optional
+  }
+}
+
+// Format USD price
+function formatUsdPrice(usdValue) {
+  if (usdValue >= 0.01) {
+    return usdValue.toFixed(4)
+  } else {
+    return usdValue.toFixed(6)
+  }
+}
+
 onMounted(() => {
+  // Fetch Nimiq price when modal opens
+  fetchNimiqPrice()
+  
   // Check if user has dismissed the modal or accepted disclaimer before
   const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED)
   const accepted = localStorage.getItem(STORAGE_KEY_ACCEPTED)
@@ -305,6 +358,10 @@ function dismiss() {
 
 // Expose method to show modal again (e.g., from help button)
 function show() {
+  // Refresh price when showing modal
+  if (!nimiqUsdPrice.value) {
+    fetchNimiqPrice()
+  }
   isOpen.value = true
 }
 

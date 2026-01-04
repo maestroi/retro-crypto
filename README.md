@@ -2,6 +2,10 @@
 
 A decentralized retro gaming platform that stores classic games on the blockchain. Play DOS, Game Boy, Game Boy Color, and NES games directly in your browser, with games stored immutably on Nimiq or Solana blockchains.
 
+## 🎮 Live Demo
+
+**Try it now:** [https://maestroi.github.io/retro-crypto/](https://maestroi.github.io/retro-crypto/)
+
 ## What is This?
 
 Retro Crypto is a full-stack platform for storing and playing retro games on the blockchain:

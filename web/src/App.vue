@@ -144,6 +144,7 @@
             :catalog-loading="catalogLoading"
             :error="error"
             :progress-percent="progressPercent"
+            :protocol-id="selectedProtocolId"
             @update:platform="onPlatformChange"
             @update:game="onGameChange"
             @update:version="onVersionChange"
@@ -327,10 +328,56 @@ const dosEmulator = useDosEmulator(manifestForEmulator, fileData, verified, emul
 const gbEmulator = useGbEmulator(manifestForEmulator, fileData, verified, emulatorLoading, emulatorError, gameReady)
 const nesEmulator = useNesEmulator(manifestForEmulator, fileData, verified, emulatorLoading, emulatorError, gameReady)
 
+// Update URL based on protocol
+function updateUrlForProtocol(protocolId) {
+  const base = import.meta.env.BASE_URL || '/'
+  const path = base === '/' ? `/${protocolId}` : `${base}${protocolId}`
+  const currentPath = window.location.pathname
+  
+  // Only update if path is different
+  if (currentPath !== path && !currentPath.endsWith(`/${protocolId}`)) {
+    window.history.pushState({ protocol: protocolId }, '', path)
+  }
+}
+
+// Get protocol from URL pathname
+function getProtocolFromUrl() {
+  const pathname = window.location.pathname
+  // Remove base path if on GitHub Pages
+  const base = import.meta.env.BASE_URL || '/'
+  let path = pathname
+  if (base !== '/' && pathname.startsWith(base)) {
+    // Remove base path, but keep leading slash
+    path = pathname.slice(base.length)
+    if (!path.startsWith('/')) {
+      path = '/' + path
+    }
+  }
+  const protocol = path.split('/').filter(Boolean)[0] // Get first non-empty segment
+  if (protocol === 'nimiq' || protocol === 'solana' || protocol === 'sui') {
+    return protocol
+  }
+  return null
+}
+
+// Handle browser back/forward buttons
+function handlePopState(event) {
+  const protocol = getProtocolFromUrl()
+  if (protocol && protocol !== selectedProtocolId.value) {
+    // Use setTimeout to avoid calling async function directly in event handler
+    setTimeout(() => {
+      onProtocolChange(protocol)
+    }, 0)
+  }
+}
+
 // Handle protocol/chain change
 async function onProtocolChange(protocolId) {
   // Stop current game if running
   if (gameReady.value) await stopGame()
+  
+  // Update URL
+  updateUrlForProtocol(protocolId)
   
   // Reset all game state
   selectedPlatform.value = null
@@ -626,11 +673,28 @@ watch([fileData, verified], async ([newFileData, newVerified]) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('popstate', handlePopState)
+  
+  // Initialize first
   initialize()
-  loadCatalog()
+  
+  // Check URL for protocol on mount
+  const urlProtocol = getProtocolFromUrl()
+  if (urlProtocol && urlProtocol !== selectedProtocolId.value) {
+    // Set protocol from URL without updating URL again (to avoid double update)
+    setProtocol(urlProtocol)
+    loadCatalog()
+  } else {
+    // No protocol in URL or already matches, update URL to match current protocol
+    if (!urlProtocol) {
+      updateUrlForProtocol(selectedProtocolId.value)
+    }
+    loadCatalog()
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('popstate', handlePopState)
 })
 </script>

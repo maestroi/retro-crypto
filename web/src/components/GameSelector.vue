@@ -186,22 +186,32 @@
               </dd>
             </div>
             <!-- Price/Locked Value -->
-            <div v-if="cartHeader && (cartHeader.lockedValueSOL !== undefined || cartHeader.totalCostNIM !== undefined)">
+            <div v-if="cartHeader && (cartHeader.lockedValueSOL !== undefined || cartHeader.totalCostNIM !== undefined || cartHeaderCostSUI !== null)">
               <dt class="text-xs font-medium text-gray-400">
                 <span v-if="cartHeader.lockedValueSOL !== undefined">Locked Rent</span>
-                <span v-else>Total Cost</span>
+                <span v-else-if="cartHeader.totalCostNIM !== undefined">Total Cost</span>
+                <span v-else-if="cartHeaderCostSUI !== null">Estimated Cost</span>
               </dt>
               <dd class="mt-0.5 text-sm text-white">
                 <span v-if="cartHeader.lockedValueSOL !== undefined">
                   ◎ {{ formatPrice(cartHeader.lockedValueSOL) }} SOL
+                  <span v-if="solUsdPrice" class="text-gray-500 ml-1">(~${{ formatUsdPrice(cartHeader.lockedValueSOL * solUsdPrice) }})</span>
                   <span v-if="cartHeader.numChunks && cartHeader.chunkRentPerAccount" class="text-xs text-gray-400 block mt-0.5">
                     {{ cartHeader.numChunks.toLocaleString() }} chunks × ~{{ formatPrice(cartHeader.chunkRentPerAccount) }} SOL each
                   </span>
                 </span>
                 <span v-else-if="cartHeader.totalCostNIM !== undefined">
                   {{ formatPrice(cartHeader.totalCostNIM) }} NIM
+                  <span v-if="nimiqUsdPrice" class="text-gray-500 ml-1">(~${{ formatUsdPrice(cartHeader.totalCostNIM * nimiqUsdPrice) }})</span>
                   <span v-if="cartHeader.numChunks && cartHeader.totalTxs" class="text-xs text-gray-400 block mt-0.5">
                     {{ cartHeader.totalTxs.toLocaleString() }} transactions ({{ cartHeader.numChunks.toLocaleString() }} chunks + 1 CART) × 1 Luna
+                  </span>
+                </span>
+                <span v-else-if="cartHeaderCostSUI !== null">
+                  ~{{ formatPrice(cartHeaderCostSUI) }} SUI
+                  <span v-if="suiUsdPrice" class="text-gray-500 ml-1">(~${{ formatUsdPrice(cartHeaderCostSUI * suiUsdPrice) }})</span>
+                  <span class="text-xs text-gray-400 block mt-0.5">
+                    Cartridge creation (~0.02-0.05 SUI) + Catalog entry (~0.01-0.02 SUI). Walrus storage is decentralized and cost-effective.
                   </span>
                 </span>
               </dd>
@@ -314,7 +324,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { formatBytes, formatHash, copyToClipboard, estimateDownloadTime, formatPrice } from '../utils.js'
 import LoadingSkeleton from './LoadingSkeleton.vue'
 
@@ -331,7 +341,8 @@ const props = defineProps({
   loading: Boolean,
   catalogLoading: Boolean,
   error: String,
-  progressPercent: Number
+  progressPercent: Number,
+  protocolId: String
 })
 
 // Game dropdown state
@@ -429,14 +440,6 @@ function handleClickOutside(event) {
   }
 }
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
 // Copy feedback state
 const copiedField = ref(null)
 
@@ -449,6 +452,69 @@ async function handleCopy(text, field) {
     }, 2000)
   }
 }
+
+// Price fetching
+const nimiqUsdPrice = ref(null)
+const solUsdPrice = ref(null)
+const suiUsdPrice = ref(null)
+
+// Calculate Sui/Walrus cartridge cost estimate
+const cartHeaderCostSUI = computed(() => {
+  if (props.protocolId === 'sui' && props.cartHeader && !props.cartHeader.lockedValueSOL && !props.cartHeader.totalCostNIM) {
+    // Estimate: 0.02-0.05 SUI for cartridge creation + 0.01-0.02 SUI for catalog entry
+    // Use average: 0.035 + 0.015 = 0.05 SUI
+    return 0.05
+  }
+  return null
+})
+
+// Format USD price
+function formatUsdPrice(usdValue) {
+  if (usdValue >= 0.01) {
+    return usdValue.toFixed(4)
+  } else {
+    return usdValue.toFixed(6)
+  }
+}
+
+// Fetch crypto prices from CoinGecko
+async function fetchPrices() {
+  try {
+    // Fetch all prices in one call
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=nimiq,solana,sui&vs_currencies=usd')
+    const data = await response.json()
+    
+    if (data.nimiq?.usd) {
+      nimiqUsdPrice.value = data.nimiq.usd
+    }
+    if (data.solana?.usd) {
+      solUsdPrice.value = data.solana.usd
+    }
+    if (data.sui?.usd) {
+      suiUsdPrice.value = data.sui.usd
+    }
+  } catch (error) {
+    console.warn('Failed to fetch crypto prices:', error)
+    // Silently fail - prices are optional
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  // Fetch prices when component mounts
+  fetchPrices()
+})
+
+// Refetch prices when cartHeader changes (new cartridge selected)
+watch(() => props.cartHeader, () => {
+  if (props.cartHeader && (!nimiqUsdPrice.value || !solUsdPrice.value || !suiUsdPrice.value)) {
+    fetchPrices()
+  }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 const emit = defineEmits(['update:platform', 'update:game', 'update:version', 'load-cartridge', 'clear-cache'])
 

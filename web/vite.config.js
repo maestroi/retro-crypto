@@ -21,6 +21,14 @@ export default defineConfig({
       },
     },
   },
+  // SPA fallback for routing - serve index.html for all routes
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+  },
   publicDir: 'public',
   // Polyfills for @solana/web3.js in browser
   define: {
