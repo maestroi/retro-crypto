@@ -23,6 +23,9 @@ import (
 
 var (
 	cfg *config.Config
+	// Version information (set by ldflags during build)
+	Version   = "dev"
+	BuildTime = "unknown"
 )
 
 func main() {
@@ -60,6 +63,18 @@ This tool helps with:
 		cfg, err = config.Load()
 		return err
 	},
+}
+
+func init() {
+	// Add version command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("catalogctl %s\n", Version)
+			fmt.Printf("Built: %s\n", BuildTime)
+		},
+	})
 }
 
 // ============================================================================
@@ -687,6 +702,119 @@ func runGenAddEntry(cmd *cobra.Command, args []string) error {
   --gas-budget 10000000
 `, cfg.PackageID, catalogID, genEntrySlug, genEntryCartridgeID,
 		genEntryTitle, platform, genEntrySizeBytes, emulator, genEntryVersion)
+
+	return nil
+}
+
+// ============================================================================
+// remove-entry command (executes transaction)
+// ============================================================================
+
+var removeEntryCmd = &cobra.Command{
+	Use:   "remove-entry",
+	Short: "Remove an entry from a catalog",
+	Long:  `Removes a game entry from a catalog on Sui blockchain by slug.`,
+	RunE:  runRemoveEntry,
+}
+
+var (
+	removeEntryCatalogID string
+	removeEntrySlug     string
+)
+
+func init() {
+	removeEntryCmd.Flags().StringVar(&removeEntryCatalogID, "catalog", "", "Catalog object ID (optional, uses config.catalog_id if not set)")
+	removeEntryCmd.Flags().StringVar(&removeEntrySlug, "slug", "", "Entry slug to remove (required)")
+	removeEntryCmd.MarkFlagRequired("slug")
+	rootCmd.AddCommand(removeEntryCmd)
+}
+
+func runRemoveEntry(cmd *cobra.Command, args []string) error {
+	if cfg.PackageID == "" {
+		return fmt.Errorf("package_id is required in config file")
+	}
+
+	// Use flag value or fall back to config
+	catalogID := removeEntryCatalogID
+	if catalogID == "" {
+		catalogID = cfg.CatalogID
+	}
+	if catalogID == "" {
+		return fmt.Errorf("catalog ID required: set --catalog flag or catalog_id in config file")
+	}
+
+	fmt.Printf("Removing entry '%s' from catalog %s...\n", removeEntrySlug, catalogID)
+
+	// Execute sui client call
+	cmdArgs := []string{
+		"client", "call",
+		"--package", cfg.PackageID,
+		"--module", "catalog",
+		"--function", "remove_entry",
+		"--args",
+		catalogID,
+		removeEntrySlug,
+		"--gas-budget", "10000000",
+		"--json",
+	}
+
+	output, err := executeSuiCommand(cmdArgs)
+	if err != nil {
+		return fmt.Errorf("failed to remove entry: %w", err)
+	}
+
+	fmt.Printf("\n✓ Entry removed successfully!\n")
+	fmt.Printf("Transaction: %s\n", extractDigest(output))
+	return nil
+}
+
+// ============================================================================
+// gen-remove-entry command (generates sui CLI command)
+// ============================================================================
+
+var genRemoveEntryCmd = &cobra.Command{
+	Use:   "gen-remove-entry",
+	Short: "Generate sui CLI command to remove an entry from a catalog",
+	RunE:  runGenRemoveEntry,
+}
+
+var (
+	genRemoveEntryCatalogID string
+	genRemoveEntrySlug     string
+)
+
+func init() {
+	genRemoveEntryCmd.Flags().StringVar(&genRemoveEntryCatalogID, "catalog", "", "Catalog object ID (optional, uses config.catalog_id if not set)")
+	genRemoveEntryCmd.Flags().StringVar(&genRemoveEntrySlug, "slug", "", "Entry slug to remove (required)")
+	genRemoveEntryCmd.MarkFlagRequired("slug")
+	rootCmd.AddCommand(genRemoveEntryCmd)
+}
+
+func runGenRemoveEntry(cmd *cobra.Command, args []string) error {
+	if cfg.PackageID == "" {
+		return fmt.Errorf("package_id is required in config file")
+	}
+
+	// Use flag value or fall back to config
+	catalogID := genRemoveEntryCatalogID
+	if catalogID == "" {
+		catalogID = cfg.CatalogID
+	}
+	if catalogID == "" {
+		return fmt.Errorf("catalog ID required: set --catalog flag or catalog_id in config file")
+	}
+
+	fmt.Println("Run this command to remove the entry:")
+	fmt.Println()
+	fmt.Printf(`sui client call \
+  --package %s \
+  --module catalog \
+  --function remove_entry \
+  --args \
+    %s \
+    "%s" \
+  --gas-budget 10000000
+`, cfg.PackageID, catalogID, genRemoveEntrySlug)
 
 	return nil
 }

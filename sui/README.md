@@ -232,6 +232,20 @@ catalogctl gen-add-entry \
   [--version N]
 ```
 
+### remove-entry
+Remove an entry from a catalog (owner only).
+
+```bash
+catalogctl remove-entry --slug SLUG [--catalog CATALOG_ID]
+```
+
+### gen-remove-entry
+Generate sui CLI command for removing a catalog entry.
+
+```bash
+catalogctl gen-remove-entry --slug SLUG [--catalog CATALOG_ID]
+```
+
 ## Configure Frontend
 
 Add environment variables to your `.env` file in `/web`:

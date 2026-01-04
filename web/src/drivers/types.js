@@ -10,6 +10,8 @@
  * - Share common UI components across all protocols
  */
 
+import { SUI_WALRUS_PROTOCOL_CONFIG } from './suiWalrusConfig.js'
+
 /**
  * @typedef {Object} Game
  * @property {string|number} appId - Unique identifier for the app/game
@@ -166,26 +168,18 @@ export const PROTOCOL_CONFIGS = {
     defaultCatalog: 'Testnet',
     publisherAddress: ''
   },
-  sui: {
-    id: 'sui',
-    name: 'Sui + Walrus',
-    icon: '🔵',
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-400/10',
-    rpcEndpoints: [
-      { name: 'Sui Testnet (PublicNode)', url: 'https://sui-testnet-rpc.publicnode.com' },
-      { name: 'Sui Testnet (Official)', url: 'https://fullnode.testnet.sui.io:443' },
-      { name: 'Custom...', url: 'custom' }
-    ],
-    catalogs: [
-      { name: 'test', address: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d' },
-      { name: 'Custom...', address: 'custom' }
-    ],
-    defaultRpc: 'https://fullnode.testnet.sui.io:443',
-    defaultCatalog: 'test',
-    publisherAddress: '',
-    walrusAggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space'
-  }
+  sui: (() => {
+    // Use config from suiWalrusConfig.js which supports environment variables
+    // Normalize catalogs to use 'address' property for consistency
+    const suiConfig = SUI_WALRUS_PROTOCOL_CONFIG
+    return {
+      ...suiConfig,
+      catalogs: suiConfig.catalogs.map(cat => ({
+        ...cat,
+        address: cat.catalogId || cat.address || ''
+      }))
+    }
+  })()
 }
 
 /**

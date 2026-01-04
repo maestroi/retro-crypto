@@ -52,16 +52,19 @@ function parseCatalogConfigs() {
   }
   
   // Default catalogs - hardcoded like Nimiq and Solana
+  // Use 'address' property for consistency with other protocols
   return [
     {
       name: 'test',
-      catalogId: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d',
+      address: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d',
+      catalogId: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d', // Keep for backward compatibility
       platform: 'mixed',
       description: 'Test games on Sui testnet',
     },
     {
       name: 'Custom...',
-      catalogId: 'custom',
+      address: 'custom',
+      catalogId: 'custom', // Keep for backward compatibility
       description: 'Enter a custom catalog ID',
     }
   ]
