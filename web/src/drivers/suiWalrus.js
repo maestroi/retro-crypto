@@ -14,6 +14,84 @@
 import { verifySHA256, bytesToHex } from '../utils/payloads.js'
 import { loadSuiWalrusConfig } from './suiWalrusConfig.js'
 
+// Full Base58 alphabet including lowercase 'l' (used by Walrus)
+// Same as Go implementation: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+/**
+ * Decode base58 string to bytes (matching Go implementation)
+ * Uses big integer conversion to match Go's math/big behavior
+ */
+function base58Decode(s) {
+  if (!s || s.length === 0) return new Uint8Array(0)
+  
+  // Convert to big integer (like Go's big.Int)
+  let bigInt = BigInt(0)
+  const radix = BigInt(58)
+  
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i]
+    const idx = BASE58_ALPHABET.indexOf(char)
+    if (idx === -1) {
+      throw new Error(`invalid base58 character: ${char}`)
+    }
+    bigInt = bigInt * radix + BigInt(idx)
+  }
+  
+  // Convert big integer to bytes
+  const bytes = []
+  let num = bigInt
+  while (num > 0n) {
+    bytes.unshift(Number(num & 0xFFn))
+    num = num >> 8n
+  }
+  
+  // Handle leading zeros (character '1' in base58 = 0)
+  const leadingZeros = s.split('').findIndex(c => c !== BASE58_ALPHABET[0])
+  const leadingZeroCount = leadingZeros === -1 ? s.length : leadingZeros
+  
+  const result = new Uint8Array(leadingZeroCount + bytes.length)
+  result.set(bytes, leadingZeroCount)
+  
+  return result
+}
+
+/**
+ * Encode bytes to base58 string (matching Go implementation)
+ */
+function base58Encode(bytes) {
+  if (!bytes || bytes.length === 0) return ''
+  
+  // Convert bytes to big integer
+  let bigInt = BigInt(0)
+  for (let i = 0; i < bytes.length; i++) {
+    bigInt = bigInt * 256n + BigInt(bytes[i] & 0xFF)
+  }
+  
+  // Count leading zeros
+  let leadingZeros = 0
+  while (leadingZeros < bytes.length && bytes[leadingZeros] === 0) {
+    leadingZeros++
+  }
+  
+  // Encode (matching Go's DivMod logic)
+  const result = []
+  let num = bigInt
+  const radix = BigInt(58)
+  while (num > 0n) {
+    const mod = num % radix
+    result.unshift(BASE58_ALPHABET[Number(mod)])
+    num = num / radix  // BigInt division truncates automatically
+  }
+  
+  // Add leading zeros (character '1' represents zero byte)
+  for (let i = 0; i < leadingZeros; i++) {
+    result.unshift(BASE58_ALPHABET[0])
+  }
+  
+  return result.join('')
+}
+
 // Platform codes matching Move contract
 const PLATFORMS = {
   0: 'DOS',
@@ -43,6 +121,17 @@ function bytesArrayToHex(arr) {
 }
 
 /**
+ * Convert bytes array to base58 string (for Walrus blob IDs)
+ * @param {number[]} arr 
+ * @returns {string}
+ */
+function bytesArrayToBase58(arr) {
+  if (!arr || !Array.isArray(arr)) return ''
+  const bytes = Uint8Array.from(arr)
+  return base58Encode(bytes)
+}
+
+/**
  * Sui RPC Client
  */
 class SuiRPC {
@@ -68,29 +157,45 @@ class SuiRPC {
           params
         }
 
-        const response = await fetch(this.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(request)
-        })
+        // Create AbortController for timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        try {
+          const response = await fetch(this.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal: controller.signal
+          })
+
+          clearTimeout(timeoutId)
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const data = await response.json()
+
+          if (data.error) {
+            throw new Error(`RPC error: ${data.error.message || JSON.stringify(data.error)}`)
+          }
+
+          return data.result
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          if (fetchError.name === 'AbortError') {
+            throw new Error(`RPC call timed out after 30 seconds: ${method}`)
+          }
+          throw fetchError
         }
-
-        const data = await response.json()
-
-        if (data.error) {
-          throw new Error(`RPC error: ${data.error.message || JSON.stringify(data.error)}`)
-        }
-
-        return data.result
         
       } catch (error) {
         lastError = error
+        console.error(`Sui RPC call error (${method}):`, error)
         if (attempt < this.maxRetries - 1) {
           const delay = this.baseDelay * Math.pow(2, attempt)
-          console.warn(`Sui RPC call failed (attempt ${attempt + 1}/${this.maxRetries}), retrying...`)
+          console.warn(`Sui RPC call failed (attempt ${attempt + 1}/${this.maxRetries}), retrying in ${delay}ms...`)
           await new Promise(r => setTimeout(r, delay))
           continue
         }
@@ -126,6 +231,8 @@ class SuiRPC {
    * Get a specific dynamic field object
    */
   async getDynamicFieldObject(parentId, name) {
+    // The name parameter should be the full name object from getDynamicFields response
+    // It can be either a string or an object with a type and value
     return this.call('suix_getDynamicFieldObject', [parentId, name])
   }
 }
@@ -145,14 +252,20 @@ class WalrusClient {
    * @returns {Promise<Uint8Array>}
    */
   async downloadBlob(blobId, maxRetries = 3) {
-    const url = `${this.aggregatorUrl}/v1/${blobId}`
     let lastError = null
+    const url = `${this.aggregatorUrl}/v1/blobs/${blobId}`
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const response = await fetch(url)
         
         if (!response.ok) {
+          if (response.status === 404 || response.status === 400) {
+            // Some base58 encodings are equivalent but Walrus only accepts the original
+            // This can happen if the Go encoder produced a different encoding than Walrus expects
+            // The bytes are correct, but the base58 string encoding differs
+            throw new Error(`Blob not found (${response.status}). This is likely due to a base58 encoding mismatch. The blob ID stored in the contract uses a different base58 encoding than Walrus expects. Solution: Re-upload the game using the latest catalogctl version. Blob ID: ${blobId}`)
+          }
           throw new Error(`Download failed: HTTP ${response.status}`)
         }
 
@@ -223,19 +336,27 @@ function parseCartridgeObject(data) {
   const content = data.content
   const fields = content.fields || content
   
-  return {
-    id: data.objectId,
-    slug: fields.slug || '',
-    title: fields.title || '',
-    platform: Number(fields.platform) || 0,
-    emulatorCore: fields.emulator_core || '',
-    version: Number(fields.version) || 1,
-    blobId: bytesArrayToHex(fields.blob_id) || '',
-    sha256: bytesArrayToHex(fields.sha256) || '',
-    sizeBytes: Number(fields.size_bytes) || 0,
-    publisher: fields.publisher || '',
-    createdAtMs: Number(fields.created_at_ms) || 0
-  }
+    const blobIdBytes = fields.blob_id || []
+    const blobId = bytesArrayToBase58(blobIdBytes)
+    
+    // Debug: log blob ID conversion
+    if (blobIdBytes.length > 0) {
+      console.log(`Blob ID bytes length: ${blobIdBytes.length}, base58: ${blobId}`)
+    }
+    
+    return {
+      id: data.objectId,
+      slug: fields.slug || '',
+      title: fields.title || '',
+      platform: Number(fields.platform) || 0,
+      emulatorCore: fields.emulator_core || '',
+      version: Number(fields.version) || 1,
+      blobId: blobId || '', // Convert to base58 for Walrus
+      sha256: bytesArrayToHex(fields.sha256) || '',
+      sizeBytes: Number(fields.size_bytes) || 0,
+      publisher: fields.publisher || '',
+      createdAtMs: Number(fields.created_at_ms) || 0
+    }
 }
 
 /**
@@ -245,7 +366,17 @@ function parseCartridgeObject(data) {
  */
 export function createSuiWalrusDriver(rpcUrl) {
   const config = loadSuiWalrusConfig()
-  const suiRpc = new SuiRPC(rpcUrl || config.suiRpcUrl)
+  
+  // Use Vite proxy in development to avoid CORS issues
+  let effectiveRpcUrl = rpcUrl || config.suiRpcUrl
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    // In development, use Vite proxy
+    if (effectiveRpcUrl.includes('fullnode.testnet.sui.io')) {
+      effectiveRpcUrl = '/sui-rpc'
+    }
+  }
+  
+  const suiRpc = new SuiRPC(effectiveRpcUrl)
   const walrusClient = new WalrusClient(config.walrusAggregatorUrl)
   
   return {
@@ -279,27 +410,46 @@ export function createSuiWalrusDriver(rpcUrl) {
       // Enumerate dynamic fields to get all entries
       const entries = []
       let cursor = null
+      let previousCursor = null
       
       do {
         const fieldsResponse = await suiRpc.getDynamicFields(catalogId, cursor, 50)
+        const fields = fieldsResponse.data || []
         
-        for (const field of fieldsResponse.data || []) {
+        for (const field of fields) {
           // Get the dynamic field value
-          const fieldObj = await suiRpc.getDynamicFieldObject(catalogId, field.name)
-          
-          if (fieldObj.data) {
-            // Extract slug from field name
-            const slug = field.name?.value || field.name || ''
-            const entry = parseCatalogEntry(slug, fieldObj.data)
+          try {
+            const fieldObj = await suiRpc.getDynamicFieldObject(catalogId, field.name)
             
-            if (entry) {
-              entries.push(entry)
+            if (fieldObj.data) {
+              // Extract slug from field name
+              const slug = field.name?.value || field.name || ''
+              const entry = parseCatalogEntry(slug, fieldObj.data)
+              
+              if (entry) {
+                entries.push(entry)
+              }
             }
+          } catch (err) {
+            console.error(`Error processing field ${field.name}:`, err)
+            throw err
           }
         }
         
-        cursor = fieldsResponse.nextCursor
-      } while (cursor)
+        // Check next cursor before updating
+        const nextCursor = fieldsResponse.nextCursor
+        
+        // Stop if:
+        // 1. No next cursor (null or undefined)
+        // 2. Cursor hasn't changed (infinite loop protection)
+        // 3. No fields returned and no next cursor
+        if (!nextCursor || nextCursor === cursor || (fields.length === 0 && !nextCursor)) {
+          break
+        }
+        
+        previousCursor = cursor
+        cursor = nextCursor
+      } while (true)
 
       console.log(`Loaded ${entries.length} catalog entries`)
 
@@ -378,6 +528,9 @@ export function createSuiWalrusDriver(rpcUrl) {
       if (!cartHeader.blobId) {
         throw new Error('Cartridge has no blob ID')
       }
+
+      console.log(`Downloading blob from Walrus: ${cartHeader.blobId}`)
+      console.log(`Blob ID length: ${cartHeader.blobId.length}, format: base58`)
 
       const startTime = Date.now()
 

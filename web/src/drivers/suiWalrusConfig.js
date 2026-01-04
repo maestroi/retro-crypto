@@ -15,7 +15,8 @@
  */
 
 // Default configuration for Sui testnet
-const DEFAULT_SUI_RPC_TESTNET = 'https://fullnode.testnet.sui.io:443'
+// Using publicnode.com endpoint which supports CORS
+const DEFAULT_SUI_RPC_TESTNET = 'https://sui-testnet-rpc.publicnode.com'
 const DEFAULT_WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space'
 
 /**
@@ -50,13 +51,11 @@ function parseCatalogConfigs() {
     }
   }
   
-  // Default catalogs - these would be populated after deployment
-  const defaultCatalogId = getEnvVar('SUI_CATALOG_ID', '')
-  
+  // Default catalogs - hardcoded like Nimiq and Solana
   return [
     {
-      name: 'Testnet Games',
-      catalogId: defaultCatalogId,
+      name: 'test',
+      catalogId: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d',
       platform: 'mixed',
       description: 'Test games on Sui testnet',
     },
@@ -93,14 +92,13 @@ export const SUI_WALRUS_PROTOCOL_CONFIG = {
   color: 'text-blue-400',
   bgColor: 'bg-blue-400/10',
   rpcEndpoints: [
-    { name: 'Sui Testnet', url: DEFAULT_SUI_RPC_TESTNET },
-    { name: 'Sui Devnet', url: 'https://fullnode.devnet.sui.io:443' },
-    { name: 'Sui Mainnet', url: 'https://fullnode.mainnet.sui.io:443' },
+    { name: 'Sui Testnet (PublicNode)', url: DEFAULT_SUI_RPC_TESTNET },
+    { name: 'Sui Testnet (Official)', url: 'https://fullnode.testnet.sui.io:443' },
     { name: 'Custom...', url: 'custom' },
   ],
   catalogs: parseCatalogConfigs(),
   defaultRpc: DEFAULT_SUI_RPC_TESTNET,
-  defaultCatalog: 'Testnet Games',
+  defaultCatalog: 'test',
   publisherAddress: '',
   walrusAggregatorUrl: DEFAULT_WALRUS_AGGREGATOR,
 }

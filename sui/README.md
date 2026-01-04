@@ -58,20 +58,35 @@ sui client publish --gas-budget 100000000
 
 ### 2. Configure CLI
 
-Create a `.env` file in the `sui/` directory:
+Create a `config.json` file in the `sui/` directory:
 
-```env
-# Network
-SUI_NETWORK=testnet
-SUI_RPC_URL=https://fullnode.testnet.sui.io:443
-
-# Package ID from deployment
-PACKAGE_ID=0x1234...abcd
-
-# Walrus endpoints
-WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
-WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
+```json
+{
+  "sui_network": "testnet",
+  "sui_rpc_url": "https://fullnode.testnet.sui.io:443",
+  "walrus_network": "testnet",
+  "walrus_aggregator_url": "https://aggregator.walrus-testnet.walrus.space",
+  "walrus_publisher_url": "https://publisher.walrus-testnet.walrus.space",
+  "package_id": "0x54d213178e1dab684a04ae06551255f729e358ce6388b6fab0529e3c6c1f81d3",
+  "catalog_id": "",
+  "private_key": "your_hex_private_key_here",
+  "mnemonic": "",
+  "registry_id": ""
+}
 ```
+
+**Config file priority:**
+1. `config.json` (highest priority)
+2. `.env` file (legacy support)
+3. Environment variables (fallback)
+
+**Getting your private key:**
+```bash
+# Export from sui client
+sui keytool export --key-identity <ADDRESS>
+```
+
+An example config file is provided as `config.example.json`.
 
 ### 3. Create a Catalog
 
@@ -379,10 +394,32 @@ Get testnet SUI from faucet:
 sui client faucet
 ```
 
-### "Walrus upload failed"
-1. Check Walrus publisher URL is correct
-2. Try a smaller file first
-3. Ensure you have WAL tokens (visit walrus.site/faucet)
+### "Walrus upload failed" or "publisher node is out of SUI funds"
+The publisher node needs SUI to pay for storage. If you see "could not find SUI coins", try:
+
+1. **Use Walrus CLI** (recommended - uses your own SUI balance):
+   ```bash
+   # Install Walrus CLI
+   cargo install --git https://github.com/MystenLabs/walrus.git walrus
+   
+   # Upload using your SUI balance
+   walrus store --file game.zip --epochs 5
+   ```
+   Then use the returned blob ID with `catalogctl` to create the cartridge.
+
+2. **Try alternative publisher nodes** (update `walrus_publisher_url` in `config.json`):
+   - `https://wal-publisher-testnet.staketab.org`
+   - `https://walrus-testnet-publisher.nodes.guru`
+   - `https://publisher.testnet.walrus.mirai.cloud`
+   - `https://walrus-testnet-publisher.staketab.org`
+
+3. **Ensure you have SUI** in your wallet (for Walrus CLI method):
+   ```bash
+   sui client faucet
+   ```
+
+4. Try a smaller file first
+5. Some publishers may require authentication - check Walrus documentation
 
 ### "Catalog not found"
 Verify the catalog ID exists:

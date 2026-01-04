@@ -3,6 +3,7 @@ package config
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,23 +12,25 @@ import (
 // Config holds all configuration values
 type Config struct {
 	// Sui RPC endpoint
-	SuiRPCURL string
+	SuiRPCURL string `json:"sui_rpc_url"`
 	// Sui network (testnet, devnet, mainnet)
-	SuiNetwork string
+	SuiNetwork string `json:"sui_network"`
 	// Walrus network (testnet, devnet, mainnet)
-	WalrusNetwork string
+	WalrusNetwork string `json:"walrus_network"`
 	// Walrus aggregator URL for reading blobs
-	WalrusAggregatorURL string
+	WalrusAggregatorURL string `json:"walrus_aggregator_url"`
 	// Walrus publisher URL for uploading blobs
-	WalrusPublisherURL string
+	WalrusPublisherURL string `json:"walrus_publisher_url"`
 	// Private key (hex encoded, without 0x prefix)
-	PrivateKey string
+	PrivateKey string `json:"private_key"`
 	// Mnemonic phrase (alternative to private key)
-	Mnemonic string
+	Mnemonic string `json:"mnemonic"`
 	// Package ID of the deployed cartridge_storage module
-	PackageID string
+	PackageID string `json:"package_id"`
+	// Optional: Default catalog ID for commands
+	CatalogID string `json:"catalog_id"`
 	// Optional: Registry object ID for catalog discovery
-	RegistryID string
+	RegistryID string `json:"registry_id"`
 }
 
 // Default configuration values
@@ -41,38 +44,77 @@ const (
 	DefaultWalrusPublisher  = "https://publisher.walrus-testnet.walrus.space"
 )
 
-// Load reads configuration from environment and .env file
+// Load reads configuration from config.json file or environment variables
+// Priority: config.json > .env > environment variables
 func Load() (*Config, error) {
-	// Try to load .env file
-	loadEnvFile(".env")
+	cfg := &Config{}
 
-	cfg := &Config{
-		SuiNetwork:          getEnv("SUI_NETWORK", DefaultSuiNetwork),
-		WalrusNetwork:       getEnv("WALRUS_NETWORK", DefaultWalrusNetwork),
-		WalrusAggregatorURL: getEnv("WALRUS_AGGREGATOR_URL", DefaultWalrusAggregator),
-		WalrusPublisherURL:  getEnv("WALRUS_PUBLISHER_URL", DefaultWalrusPublisher),
-		PrivateKey:          getEnv("SUI_PRIVATE_KEY", ""),
-		Mnemonic:            getEnv("SUI_MNEMONIC", ""),
-		PackageID:           getEnv("PACKAGE_ID", ""),
-		RegistryID:          getEnv("REGISTRY_ID", ""),
+	// Try to load from config.json first
+	if _, err := os.Stat("config.json"); err == nil {
+		if err := loadJSONConfig("config.json", cfg); err != nil {
+			return nil, fmt.Errorf("failed to load config from config.json: %w", err)
+		}
+	} else {
+		// Try to load .env file if config.json doesn't exist
+		loadEnvFile(".env")
+	}
+
+	// Fill in values from config file or environment variables
+	if cfg.SuiNetwork == "" {
+		cfg.SuiNetwork = getEnv("SUI_NETWORK", DefaultSuiNetwork)
+	}
+	if cfg.WalrusNetwork == "" {
+		cfg.WalrusNetwork = getEnv("WALRUS_NETWORK", DefaultWalrusNetwork)
+	}
+	if cfg.WalrusAggregatorURL == "" {
+		cfg.WalrusAggregatorURL = getEnv("WALRUS_AGGREGATOR_URL", DefaultWalrusAggregator)
+	}
+	if cfg.WalrusPublisherURL == "" {
+		cfg.WalrusPublisherURL = getEnv("WALRUS_PUBLISHER_URL", DefaultWalrusPublisher)
+	}
+	if cfg.PrivateKey == "" {
+		cfg.PrivateKey = getEnv("SUI_PRIVATE_KEY", "")
+	}
+	if cfg.Mnemonic == "" {
+		cfg.Mnemonic = getEnv("SUI_MNEMONIC", "")
+	}
+	if cfg.PackageID == "" {
+		cfg.PackageID = getEnv("PACKAGE_ID", "")
+	}
+	if cfg.CatalogID == "" {
+		cfg.CatalogID = getEnv("CATALOG_ID", "")
+	}
+	if cfg.RegistryID == "" {
+		cfg.RegistryID = getEnv("REGISTRY_ID", "")
 	}
 
 	// Set RPC URL based on network if not explicitly set
-	cfg.SuiRPCURL = getEnv("SUI_RPC_URL", "")
 	if cfg.SuiRPCURL == "" {
-		switch strings.ToLower(cfg.SuiNetwork) {
-		case "testnet":
-			cfg.SuiRPCURL = DefaultSuiRPCTestnet
-		case "devnet":
-			cfg.SuiRPCURL = DefaultSuiRPCDevnet
-		case "mainnet":
-			cfg.SuiRPCURL = DefaultSuiRPCMainnet
-		default:
-			cfg.SuiRPCURL = DefaultSuiRPCTestnet
+		cfg.SuiRPCURL = getEnv("SUI_RPC_URL", "")
+		if cfg.SuiRPCURL == "" {
+			switch strings.ToLower(cfg.SuiNetwork) {
+			case "testnet":
+				cfg.SuiRPCURL = DefaultSuiRPCTestnet
+			case "devnet":
+				cfg.SuiRPCURL = DefaultSuiRPCDevnet
+			case "mainnet":
+				cfg.SuiRPCURL = DefaultSuiRPCMainnet
+			default:
+				cfg.SuiRPCURL = DefaultSuiRPCTestnet
+			}
 		}
 	}
 
 	return cfg, nil
+}
+
+// loadJSONConfig loads configuration from a JSON file
+func loadJSONConfig(filename string, cfg *Config) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, cfg)
 }
 
 // loadEnvFile loads environment variables from a .env file

@@ -11,6 +11,15 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    proxy: {
+      // Proxy Sui RPC requests to avoid CORS issues
+      '/sui-rpc': {
+        target: 'https://fullnode.testnet.sui.io:443',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/sui-rpc/, ''),
+        secure: true,
+      },
+    },
   },
   publicDir: 'public',
   // Polyfills for @solana/web3.js in browser

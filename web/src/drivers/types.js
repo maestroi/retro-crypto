@@ -173,17 +173,16 @@ export const PROTOCOL_CONFIGS = {
     color: 'text-blue-400',
     bgColor: 'bg-blue-400/10',
     rpcEndpoints: [
-      { name: 'Sui Testnet', url: 'https://fullnode.testnet.sui.io:443' },
-      { name: 'Sui Devnet', url: 'https://fullnode.devnet.sui.io:443' },
-      { name: 'Sui Mainnet', url: 'https://fullnode.mainnet.sui.io:443' },
+      { name: 'Sui Testnet (PublicNode)', url: 'https://sui-testnet-rpc.publicnode.com' },
+      { name: 'Sui Testnet (Official)', url: 'https://fullnode.testnet.sui.io:443' },
       { name: 'Custom...', url: 'custom' }
     ],
     catalogs: [
-      { name: 'Testnet Games', address: '' }, // Set via VITE_SUI_CATALOG_ID env var
+      { name: 'test', address: '0x495b34efe960d36cc148ee0ba5cf07fadb72b0272482158dde40434869d3bf0d' },
       { name: 'Custom...', address: 'custom' }
     ],
     defaultRpc: 'https://fullnode.testnet.sui.io:443',
-    defaultCatalog: 'Testnet Games',
+    defaultCatalog: 'test',
     publisherAddress: '',
     walrusAggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space'
   }

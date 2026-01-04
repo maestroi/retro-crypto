@@ -5,6 +5,9 @@ chunks.db*
 upload_progress_*.json
 upload_plan.jsonl
 .env
+config.json
+config.yaml
+config.yml
 node_modules/
 dist/
 *.log

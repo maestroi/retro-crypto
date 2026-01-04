@@ -1,0 +1,12 @@
+{
+  "sui_network": "testnet",
+  "sui_rpc_url": "https://fullnode.testnet.sui.io:443",
+  "walrus_network": "testnet",
+  "walrus_aggregator_url": "https://aggregator.walrus-testnet.walrus.space",
+  "walrus_publisher_url": "https://publisher.walrus-testnet.walrus.space",
+  "package_id": "0x54d213178e1dab684a04ae06551255f729e358ce6388b6fab0529e3c6c1f81d3",
+  "catalog_id": "",
+  "private_key": "",
+  "mnemonic": "",
+  "registry_id": ""
+}
