@@ -10,6 +10,8 @@
  * - Share common UI components across all protocols
  */
 
+import { SUI_WALRUS_PROTOCOL_CONFIG } from './suiWalrusConfig.js'
+
 /**
  * @typedef {Object} Game
  * @property {string|number} appId - Unique identifier for the app/game
@@ -165,7 +167,19 @@ export const PROTOCOL_CONFIGS = {
     defaultRpc: 'https://rpc-solana-retro.maestroi.cc',
     defaultCatalog: 'Testnet',
     publisherAddress: ''
-  }
+  },
+  sui: (() => {
+    // Use config from suiWalrusConfig.js which supports environment variables
+    // Normalize catalogs to use 'address' property for consistency
+    const suiConfig = SUI_WALRUS_PROTOCOL_CONFIG
+    return {
+      ...suiConfig,
+      catalogs: suiConfig.catalogs.map(cat => ({
+        ...cat,
+        address: cat.catalogId || cat.address || ''
+      }))
+    }
+  })()
 }
 
 /**

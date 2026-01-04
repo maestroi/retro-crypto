@@ -23,8 +23,8 @@ jobs:
       - name: Get version from tag
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
           else
             VERSION="dev-$(git rev-parse --short HEAD)"
           fi

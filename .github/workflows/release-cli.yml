@@ -3,11 +3,11 @@ name: Release CLI
 on:
   push:
     tags:
-      - 'cli-v*'  # Triggers on tags like cli-v1.0.0
+      - 'v*'  # Triggers on tags like v1.0.0
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to create release for (e.g., cli-v1.0.0)'
+        description: 'Tag to create release for (e.g., v1.0.0)'
         required: true
 
 jobs:
@@ -44,11 +44,11 @@ jobs:
       - name: Get version from tag
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/cli-v}"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             TAG="${{ github.event.inputs.tag }}"
-            VERSION="${TAG#cli-v}"
+            VERSION="${TAG#v}"
           else
             VERSION="dev"
           fi
@@ -111,7 +111,7 @@ jobs:
         id: version
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          VERSION="${TAG#cli-v}"
+          VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Download all artifacts

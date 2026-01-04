@@ -8,7 +8,7 @@ on:
       - 'solana/rpc-proxy/**'
       - '.github/workflows/build-rpc-proxy.yml'
     tags:
-      - 'rpc-proxy-v*'  # Triggers on tags like rpc-proxy-v1.0.0
+      - 'v*'  # Triggers on tags like v1.0.0
   pull_request:
     paths:
       - 'solana/rpc-proxy/**'
@@ -56,8 +56,8 @@ jobs:
           tags: |
             # Set latest tag for main branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Tag with version for tags like rpc-proxy-v1.0.0
-            type=match,pattern=rpc-proxy-v(.*),group=1
+            # Tag with version for tags like v1.0.0
+            type=match,pattern=v(.*),group=1
             # Tag with sha for commits
             type=sha,prefix=sha-
             # Manual workflow dispatch tag
@@ -66,8 +66,8 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/rpc-proxy-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/rpc-proxy-v}"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             VERSION="${{ github.event.inputs.tag }}"
           else

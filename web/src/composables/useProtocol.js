@@ -59,7 +59,8 @@ export function useProtocol() {
       return customCatalogAddress.value
     }
     const catalog = protocolConfig.value?.catalogs?.find(c => c.name === selectedCatalogName.value)
-    return catalog?.address || ''
+    // Support both 'address' (Nimiq/Solana) and 'catalogId' (Sui) properties
+    return catalog?.address || catalog?.catalogId || ''
   })
   
   // Publisher address for current protocol
