@@ -1,5 +1,5 @@
 <template>
-  <div class="divide-y divide-gray-200 overflow-hidden rounded-lg bg-white shadow-sm dark:divide-white/10 dark:bg-gray-800/50 dark:shadow-none dark:outline dark:-outline-offset-1 dark:outline-white/10">
+  <div class="divide-y divide-white/10 overflow-hidden rounded-lg bg-gray-800/50 shadow-none outline -outline-offset-1 outline-white/10">
     <div class="px-4 py-5 sm:px-6">
       <h2 class="text-xl font-semibold text-white">Select Game & Download</h2>
     </div>
@@ -107,7 +107,7 @@
         </div>
         
         <!-- Game Description/Title (when game selected) -->
-        <div v-if="selectedGame" class="pt-4 border-t border-gray-700 dark:border-white/10">
+        <div v-if="selectedGame" class="pt-4 border-t border-white/10">
           <div class="text-sm">
             <h3 class="text-base font-semibold text-white mb-1">{{ runJson?.title || selectedGame?.title }}</h3>
             <p v-if="runJson?.description" class="text-xs text-gray-300 mt-1">{{ runJson.description }}</p>
@@ -115,7 +115,7 @@
         </div>
         
         <!-- Cartridge Info (when version selected) -->
-        <div v-if="selectedVersion && (cartHeader || runJson)" class="pt-4 border-t border-gray-700 dark:border-white/10">
+        <div v-if="selectedVersion && (cartHeader || runJson)" class="pt-4 border-t border-white/10">
           <h3 class="text-sm font-semibold text-white mb-3">Cartridge Info</h3>
           <dl class="space-y-2 text-sm">
             <div v-if="platformName">
@@ -220,7 +220,7 @@
         </div>
 
         <!-- Download Progress -->
-        <div v-if="(loading || verified) && selectedVersion && syncProgress && (syncProgress.expectedChunks > 0 || syncProgress.txPagesFetched > 0)" class="pt-4 border-t border-gray-700 dark:border-white/10">
+        <div v-if="(loading || verified) && selectedVersion && syncProgress && (syncProgress.expectedChunks > 0 || syncProgress.txPagesFetched > 0)" class="pt-4 border-t border-white/10">
           <h3 class="text-sm font-semibold text-white mb-2">Download Progress</h3>
           
           <div v-if="syncProgress && (syncProgress.expectedChunks > 0 || syncProgress.txPagesFetched > 0)" class="space-y-2">
@@ -278,7 +278,7 @@
     </div>
     
     <!-- Download Button -->
-    <div class="px-4 py-4 sm:px-6 border-t border-gray-700 dark:border-white/10">
+    <div class="px-4 py-4 sm:px-6 border-t border-white/10">
       <div class="flex gap-2">
         <button
           @click="$emit('load-cartridge')"

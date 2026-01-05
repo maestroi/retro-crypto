@@ -1,6 +1,6 @@
 <template>
   <!-- Error Boundary: Show friendly error when emulator crashes -->
-  <div v-if="hasError" class="divide-y divide-gray-200 overflow-hidden rounded-lg bg-white shadow-sm dark:divide-white/10 dark:bg-gray-800/50 dark:shadow-none dark:outline dark:-outline-offset-1 dark:outline-white/10">
+  <div v-if="hasError" class="divide-y divide-white/10 overflow-hidden rounded-lg bg-gray-800/50 shadow-none outline -outline-offset-1 outline-white/10">
     <div class="px-4 py-5 sm:px-6">
       <h2 class="text-xl font-semibold text-red-400 flex items-center gap-2">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,7 +70,7 @@
     @download-file="$emit('download-file')"
     ref="emulatorRef"
   />
-  <div v-else class="divide-y divide-gray-200 overflow-hidden rounded-lg bg-white shadow-sm dark:divide-white/10 dark:bg-gray-800/50 dark:shadow-none dark:outline dark:-outline-offset-1 dark:outline-white/10">
+  <div v-else class="divide-y divide-white/10 overflow-hidden rounded-lg bg-gray-800/50 shadow-none outline -outline-offset-1 outline-white/10">
     <div class="px-4 py-5 sm:px-6">
       <h2 class="text-xl font-semibold text-white">{{ platform || 'Unknown' }} Emulator</h2>
     </div>
